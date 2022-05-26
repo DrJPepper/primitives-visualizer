@@ -1,6 +1,8 @@
 import sys
 import json
 
+import numpy as np
+
 from PyQt5.QtWidgets import QApplication, QLabel, QMainWindow, QPushButton
 from PyQt5.QtCore import QFile, QIODevice
 from PyQt5.uic import loadUi
@@ -41,13 +43,21 @@ class MainWindow(QMainWindow):
         export_scene.exporter = self.exporter
         self.exportButton.clicked.connect(export_scene)
 
+        # Associate needed objects with the callback function object itself
+        callback_function.ren = self.ren
+        callback_function.info_box = self.infoBox
+        # Set up callback
+        self.iren.AddObserver('LeftButtonPressEvent', callback_function)
+
         scene = json.load(open('../4d_multilayer_modeler/build/out.json'))\
                 ['list'][0]['entities']
-        print(scene)
+        positions = [[], [], []]
         for entity in scene:
+            for i in range(len(entity['position'])):
+                positions[i % 3].append(entity['position'][i])
             if entity['type'] == 'point':
                 source = vtk.vtkSphereSource()
-                source.SetRadius(1.0)
+                source.SetRadius(0.1)
                 source.SetCenter(entity['position'])
                 mapper = vtk.vtkPolyDataMapper()
                 mapper.SetInputConnection(source.GetOutputPort())
@@ -55,101 +65,50 @@ class MainWindow(QMainWindow):
                 actor = vtk.vtkActor()
                 actor.SetMapper(mapper)
                 actor.GetProperty().SetColor(entity['color'])
-
                 self.ren.AddActor(actor)
+            elif entity['type'] == 'vector':
+                line_source = vtk.vtkLineSource()
+                line_source.SetPoint1(entity['position'][:3])
+                line_source.SetPoint2(entity['position'][3:])
+                line_source.SetResolution(6)
+                line_source.Update()
+                tube_filter = vtk.vtkTubeFilter()
+                tube_filter.SetInputConnection(line_source.GetOutputPort())
+                tube_filter.SetNumberOfSides(8)
+                tube_filter.SetRadius(0.05)
+                tube_filter.Update()
+                #arrow = vtk.vtkArrowSource()
+                #arrow.SetTipResolution(16)
+                #arrow.SetTipLength(0.3)
+                #arrow.SetTipRadius(0.1)
+                #glyph = vtk.vtkGlyph3D()
+                #glyph.SetSourceConnection(arrow.GetOutputPort())
+                #glyph.SetInputData(tube_filter.GetOutput())
+                mapper = vtk.vtkPolyDataMapper()
+                #mapper.SetInputConnection(glyph.GetOutputPort())
+                mapper.SetInputConnection(tube_filter.GetOutputPort())
+                actor = vtk.vtkActor()
+                actor.SetMapper(mapper)
+                actor.GetProperty().SetColor(entity['color'])
+                self.ren.AddActor(actor)
+                #glyph.SetVectorModeToUseNormal();
+                #glyph.SetScaleModeToScaleByVector();
+                #glyph.SetScaleFactor(size);
+                #glyph.OrientOn();
+                #glyph.Update();
 
+        cube_axis = vtk.vtkCubeAxesActor()
+        cube_axis.SetCamera(self.ren.GetActiveCamera());
+        mins = [min(i) for i in positions]
+        maxs = [max(i) for i in positions]
+        cube_axis.SetFlyModeToStaticEdges()
+        cube_axis.SetBounds((mins[0], maxs[0], mins[1], maxs[1],
+            mins[2], maxs[2]))
+        self.ren.AddActor(cube_axis)
+
+        reset_camera()
         self.show()
         self.iren.Initialize()
-"""
-        # Used to store building information
-        info = {}
-
-        # Read in the main data file
-        lines = [x.strip().split(',') for x in
-                open('philly_data.csv').readlines()][1:]
-        for line in lines:
-            # Create source
-            source = vtk.vtkCubeSource()
-            # Define base size of buildings
-            a = 0.0002
-            # Convert from ft to a rough Latitude Longitude equivalent,
-            # then scale it up by some factor for better visibility (set to
-            # 10 currently)
-            ftToLatLong = lambda x: (float(x)*.0003048*90/10000) * 10
-
-            # Define the "ground"
-            height = ftToLatLong(line[7])
-            # Buildings need to go negative to look right in the outline
-            source.SetBounds(0, a, 0, a, -height, 0)
-            source.SetCenter(float(line[0]), float(line[1]), 0 - height / 2)
-
-            # Create a mapper
-            mapper = vtk.vtkPolyDataMapper()
-            mapper.SetInputConnection(source.GetOutputPort())
-
-            # Create an actor
-            actor = vtk.vtkActor()
-            actor.SetMapper(mapper)
-            actor.GetProperty().SetColor(list(colors.GetColor3d("SaddleBrown")))
-
-            self.ren.AddActor(actor)
-
-            # Define the "building"
-            source = vtk.vtkCubeSource()
-            build_height = ftToLatLong(line[8])
-            source.SetBounds(0, a, 0, a, -build_height, 0)
-            # Place this on top of the "ground"
-            source.SetCenter(float(line[0]), float(line[1]), -height - build_height / 2)
-
-            # Create a mapper
-            mapper = vtk.vtkPolyDataMapper()
-            mapper.SetInputConnection(source.GetOutputPort())
-
-            # Create an actor
-            actor = vtk.vtkActor()
-            actor.SetMapper(mapper)
-            actor.GetProperty().SetColor(list(colors.GetColor3d("Silver")))
-
-            # Save its info
-            self.ren.AddActor(actor)
-            info[actor] = f'{line[2]} {line[3]}\n{line[4]}, {line[5]} '\
-                          f'{line[6]}\nLat: {line[0]}, Long: {line[1]}\n'\
-                          f'Ground Elevation: {line[7]} ft\n'\
-                          f'Building Height: {line[8]} ft\n'
-
-        # Read the Philly outline
-        lines = [x.strip().split(',') for x in
-                open('vague_outline.csv').readlines()]
-
-        # Render it via a polyline and cell array
-        points = vtk.vtkPoints()
-        pt_count = len(lines)
-        for line in lines:
-            points.InsertNextPoint(float(line[0]), float(line[1]), 0.0)
-        poly_line = vtk.vtkPolyLine()
-        poly_line.GetPointIds().SetNumberOfIds(pt_count)
-        for i in range(pt_count):
-            poly_line.GetPointIds().SetId(i, i)
-        cells = vtk.vtkCellArray()
-        cells.InsertNextCell(poly_line)
-        poly_data = vtk.vtkPolyData()
-        poly_data.SetPoints(points)
-        poly_data.SetLines(cells)
-        mapper = vtk.vtkPolyDataMapper()
-        mapper.SetInputData(poly_data)
-        actor = vtk.vtkActor()
-        actor.SetMapper(mapper)
-        # Eagles color
-        actor.GetProperty().SetColor(list(colors.GetColor3d("DarkGreen")))
-        self.ren.AddActor(actor)
-
-        # Associate needed objects with the callback function object itself
-        callback_function.ren = self.ren
-        callback_function.info = info
-        callback_function.info_box = self.infoBox
-        # Set up callback
-        self.iren.AddObserver('LeftButtonPressEvent', callback_function)
-"""
 
 def export_scene():
     export_scene.exporter.Update()
@@ -163,9 +122,8 @@ def callback_function(caller, ev):
     pos = caller.GetEventPosition()
     picker.PickProp(pos[0], pos[1], callback_function.ren)
     picked_actor = picker.GetActor()
-    if picked_actor in callback_function.info.keys():
-        callback_function.info_box.setPlainText(
-                callback_function.info[picked_actor])
+    pos = picker.GetPickPosition()
+    callback_function.info_box.setPlainText(f'{pos[0]}, {pos[1]}, {pos[2]}')
 
 def main():
     app = QApplication(sys.argv)
