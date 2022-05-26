@@ -1,4 +1,5 @@
 import sys
+import json
 
 from PyQt5.QtWidgets import QApplication, QLabel, QMainWindow, QPushButton
 from PyQt5.QtCore import QFile, QIODevice
@@ -28,10 +29,38 @@ class MainWindow(QMainWindow):
         self.exporter = vtk.vtkOBJExporter()
         self.exporter.SetActiveRenderer(self.ren)
         self.exporter.SetRenderWindow(self.vtkWidget.GetRenderWindow())
-        self.exporter.SetFilePrefix("philly_scene")
+        self.exporter.SetFilePrefix("prim-vis")
 
         colors = vtk.vtkNamedColors()
 
+        # Buttons
+        reset_camera.ren = self.ren
+        reset_camera.renWin = self.vtkWidget.GetRenderWindow()
+        self.centerButton.clicked.connect(reset_camera)
+
+        export_scene.exporter = self.exporter
+        self.exportButton.clicked.connect(export_scene)
+
+        scene = json.load(open('../4d_multilayer_modeler/build/out.json'))\
+                ['list'][0]['entities']
+        print(scene)
+        for entity in scene:
+            if entity['type'] == 'point':
+                source = vtk.vtkSphereSource()
+                source.SetRadius(1.0)
+                source.SetCenter(entity['position'])
+                mapper = vtk.vtkPolyDataMapper()
+                mapper.SetInputConnection(source.GetOutputPort())
+
+                actor = vtk.vtkActor()
+                actor.SetMapper(mapper)
+                actor.GetProperty().SetColor(entity['color'])
+
+                self.ren.AddActor(actor)
+
+        self.show()
+        self.iren.Initialize()
+"""
         # Used to store building information
         info = {}
 
@@ -120,32 +149,15 @@ class MainWindow(QMainWindow):
         callback_function.info_box = self.infoBox
         # Set up callback
         self.iren.AddObserver('LeftButtonPressEvent', callback_function)
-
-        # Buttons
-        reset_camera.camera = self.ren.GetActiveCamera()
-        reset_camera.renWin = self.vtkWidget.GetRenderWindow()
-        self.centerButton.clicked.connect(reset_camera)
-        reset_camera()
-
-        export_scene.exporter = self.exporter
-        self.exportButton.clicked.connect(export_scene)
-
-        self.show()
-        self.iren.Initialize()
+"""
 
 def export_scene():
     export_scene.exporter.Update()
 
-# Custom location
 def reset_camera():
-    reset_camera.camera.SetPosition(39.7219,  -75.2668, -0.556774)
-    reset_camera.camera.SetFocalPoint(39.9996,  -75.1667,  0.016131)
-    reset_camera.camera.SetClippingRange(0.461478,  0.858228)
-    reset_camera.camera.SetViewUp(0.818622,  0.347245,  -0.45747)
-    reset_camera.camera.SetDistance(0.644482)
+    reset_camera.ren.ResetCamera()
     reset_camera.renWin.Render()
 
-# Basically the same as the C++ demo
 def callback_function(caller, ev):
     picker = vtk.vtkPropPicker()
     pos = caller.GetEventPosition()
