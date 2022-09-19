@@ -49,9 +49,18 @@ class MainWindow(QMainWindow):
         # Set up callback
         self.iren.AddObserver('LeftButtonPressEvent', callback_function)
 
-        json_doc = json.load(open('../4d_multilayer_modeler/build/out.json'))
+        #json_doc = json.load(open('../4d_multilayer_modeler/build/out.json'))
+        json_doc = json.load(open('./out.json'))
+        print(json_doc)
         self.continueButton.clicked.connect(load_next)
         load_next.i = 0
+        load_next.ren = self.ren
+        load_next.json_doc = json_doc
+        load_next.actors = []
+        reset_camera()
+        self.show()
+        load_next()
+        #self.iren.Initialize()
 
 def export_scene():
     export_scene.exporter.Update()
@@ -69,9 +78,14 @@ def callback_function(caller, ev):
     callback_function.info_box.setPlainText(f'{pos[0]}, {pos[1]}, {pos[2]}')
 
 def load_next():
-    scene = json.load(open('../4d_multilayer_modeler/build/out.json'))\
-            ['list'][0]['entities']
+    if (load_next.i > len(load_next.json_doc['list']) - 1):
+        print("No more scenes to render")
+        return
+    scene = load_next.json_doc['list'][load_next.i]['entities']
     positions = [[], [], []]
+    for actor in load_next.actors:
+        load_next.ren.RemoveActor(actor)
+    load_next.actors = []
     for entity in scene:
         for i in range(len(entity['position'])):
             positions[i % 3].append(entity['position'][i])
@@ -85,7 +99,8 @@ def load_next():
             actor = vtk.vtkActor()
             actor.SetMapper(mapper)
             actor.GetProperty().SetColor(entity['color'])
-            self.ren.AddActor(actor)
+            load_next.ren.AddActor(actor)
+            load_next.actors.append(actor)
         elif entity['type'] == 'vector':
             line_source = vtk.vtkLineSource()
             line_source.SetPoint1(entity['position'][:3])
@@ -110,7 +125,8 @@ def load_next():
             actor = vtk.vtkActor()
             actor.SetMapper(mapper)
             actor.GetProperty().SetColor(entity['color'])
-            self.ren.AddActor(actor)
+            load_next.ren.AddActor(actor)
+            load_next.actors.append(actor)
             #glyph.SetVectorModeToUseNormal();
             #glyph.SetScaleModeToScaleByVector();
             #glyph.SetScaleFactor(size);
@@ -118,17 +134,19 @@ def load_next():
             #glyph.Update();
 
     cube_axis = vtk.vtkCubeAxesActor()
-    cube_axis.SetCamera(self.ren.GetActiveCamera());
+    cube_axis.SetCamera(load_next.ren.GetActiveCamera());
     mins = [min(i) for i in positions]
     maxs = [max(i) for i in positions]
     cube_axis.SetFlyModeToStaticEdges()
     cube_axis.SetBounds((mins[0], maxs[0], mins[1], maxs[1],
         mins[2], maxs[2]))
-    self.ren.AddActor(cube_axis)
+    load_next.ren.AddActor(cube_axis)
+    load_next.actors.append(cube_axis)
+    load_next.i += 1
 
     reset_camera()
-    self.show()
-    self.iren.Initialize()
+    #self.show()
+    #self.iren.Initialize()
 
 def main():
     app = QApplication(sys.argv)
