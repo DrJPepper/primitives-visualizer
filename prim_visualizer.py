@@ -50,7 +50,7 @@ class MainWindow(QMainWindow):
         self.iren.AddObserver('LeftButtonPressEvent', callback_function)
 
         #json_doc = json.load(open('../4d_multilayer_modeler/build/out.json'))
-        json_doc = json.load(open('./out.json'))
+        json_doc = json.load(open('../tissue_sim/build/out.json'))
         print(json_doc)
         self.continueButton.clicked.connect(load_next)
         load_next.i = 0
@@ -83,8 +83,8 @@ def load_next():
         return
     scene = load_next.json_doc['list'][load_next.i]['entities']
     positions = [[], [], []]
-    for actor in load_next.actors:
-        load_next.ren.RemoveActor(actor)
+    #for actor in load_next.actors:
+    #    load_next.ren.RemoveActor(actor)
     load_next.actors = []
     for entity in scene:
         for i in range(len(entity['position'])):
@@ -133,6 +133,7 @@ def load_next():
             #glyph.OrientOn();
             #glyph.Update();
 
+    """
     cube_axis = vtk.vtkCubeAxesActor()
     cube_axis.SetCamera(load_next.ren.GetActiveCamera());
     mins = [min(i) for i in positions]
@@ -142,6 +143,7 @@ def load_next():
         mins[2], maxs[2]))
     load_next.ren.AddActor(cube_axis)
     load_next.actors.append(cube_axis)
+    """
     load_next.i += 1
 
     reset_camera()
