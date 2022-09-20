@@ -9,6 +9,8 @@ from PyQt5.uic import loadUi
 from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 import vtk
 
+TUBE_RADIUS = 0.05
+
 # Subclass QMainWindow similarly to in C++
 class MainWindow(QMainWindow):
 
@@ -57,6 +59,8 @@ class MainWindow(QMainWindow):
         load_next.ren = self.ren
         load_next.json_doc = json_doc
         load_next.actors = []
+        load_next.positions = [[], [], []]
+        load_next.cube_axis = None
         reset_camera()
         self.show()
         load_next()
@@ -82,13 +86,16 @@ def load_next():
         print("No more scenes to render")
         return
     scene = load_next.json_doc['list'][load_next.i]['entities']
-    positions = [[], [], []]
-    #for actor in load_next.actors:
-    #    load_next.ren.RemoveActor(actor)
+    if 'reset' not in load_next.json_doc.keys() or load_next.json_doc['reset']:
+        if 'reset' not in load_next.json_doc['list'][load_next.i].keys() or\
+         load_next.json_doc['list'][load_next.i]['reset']:
+            load_next.positions = [[], [], []]
+            for actor in load_next.actors:
+                load_next.ren.RemoveActor(actor)
     load_next.actors = []
     for entity in scene:
         for i in range(len(entity['position'])):
-            positions[i % 3].append(entity['position'][i])
+            load_next.positions[i % 3].append(entity['position'][i])
         if entity['type'] == 'point':
             source = vtk.vtkSphereSource()
             source.SetRadius(0.1)
@@ -110,7 +117,7 @@ def load_next():
             tube_filter = vtk.vtkTubeFilter()
             tube_filter.SetInputConnection(line_source.GetOutputPort())
             tube_filter.SetNumberOfSides(8)
-            tube_filter.SetRadius(0.05)
+            tube_filter.SetRadius(TUBE_RADIUS)
             tube_filter.Update()
             #arrow = vtk.vtkArrowSource()
             #arrow.SetTipResolution(16)
@@ -133,17 +140,21 @@ def load_next():
             #glyph.OrientOn();
             #glyph.Update();
 
-    """
     cube_axis = vtk.vtkCubeAxesActor()
     cube_axis.SetCamera(load_next.ren.GetActiveCamera());
-    mins = [min(i) for i in positions]
-    maxs = [max(i) for i in positions]
+    mins = [min(i) for i in load_next.positions]
+    maxs = [max(i) for i in load_next.positions]
+    dists = [i[0] - i[1] for i in zip(maxs, mins)]
+    mins = [i[0] - min(TUBE_RADIUS, i[1] * 0.1) for i in zip(mins, dists)]
+    maxs = [i[0] + min(TUBE_RADIUS, i[1] * 0.1) for i in zip(maxs, dists)]
     cube_axis.SetFlyModeToStaticEdges()
     cube_axis.SetBounds((mins[0], maxs[0], mins[1], maxs[1],
         mins[2], maxs[2]))
     load_next.ren.AddActor(cube_axis)
-    load_next.actors.append(cube_axis)
-    """
+    if load_next.cube_axis:
+        load_next.ren.RemoveActor(load_next.cube_axis)
+    load_next.cube_axis = cube_axis
+
     load_next.i += 1
 
     reset_camera()
