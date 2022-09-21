@@ -73,6 +73,19 @@
      <string>Continue</string>
     </property>
    </widget>
+   <widget class="QPushButton" name="runallButton">
+    <property name="geometry">
+     <rect>
+      <x>1050</x>
+      <y>220</y>
+      <width>91</width>
+      <height>21</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Run All</string>
+    </property>
+   </widget>
   </widget>
  </widget>
  <resources/>

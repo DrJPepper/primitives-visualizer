@@ -54,7 +54,8 @@ class MainWindow(QMainWindow):
 
         #json_doc = json.load(open('../4d_multilayer_modeler/build/out.json'))
         json_doc = json.load(open('../tissue_sim/build/out.json'))
-        print(json_doc)
+        #print(json_doc)
+        self.runallButton.clicked.connect(run_all)
         self.continueButton.clicked.connect(load_next)
         load_next.i = 0
         load_next.ren = self.ren
@@ -90,8 +91,12 @@ def callback_function(caller, ev):
                 f'2D Window Position: {pos[0]:.2f}, {pos[1]:.2f}\n\n' +
                 'No actor picked')
 
+def run_all():
+    while load_next.i < len(load_next.json_doc['list']):
+        load_next()
+
 def load_next():
-    if (load_next.i > len(load_next.json_doc['list']) - 1):
+    if load_next.i > len(load_next.json_doc['list']) - 1:
         print("No more scenes to render")
         return
 
@@ -122,6 +127,7 @@ def load_next():
             actor = vtk.vtkActor()
             actor.SetMapper(mapper)
             actor.GetProperty().SetColor(entity['color'])
+            actor.GetProperty().SetOpacity(entity['opacity'])
             load_next.ren.AddActor(actor)
             load_next.actors.append(actor)
         elif entity['type'] == 'vector':
@@ -148,6 +154,7 @@ def load_next():
             actor = vtk.vtkActor()
             actor.SetMapper(mapper)
             actor.GetProperty().SetColor(entity['color'])
+            actor.GetProperty().SetOpacity(entity['opacity'])
             load_next.ren.AddActor(actor)
             load_next.actors.append(actor)
             #glyph.SetVectorModeToUseNormal();
