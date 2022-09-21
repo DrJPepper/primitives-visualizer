@@ -10,6 +10,7 @@ from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 import vtk
 
 TUBE_RADIUS = 0.05
+SPHERE_RADIUS = 0.1
 
 # Subclass QMainWindow similarly to in C++
 class MainWindow(QMainWindow):
@@ -61,6 +62,7 @@ class MainWindow(QMainWindow):
         load_next.actors = []
         load_next.positions = [[], [], []]
         load_next.cube_axis = None
+        load_next.descriptions = {}
         reset_camera()
         self.show()
         load_next()
@@ -78,27 +80,41 @@ def callback_function(caller, ev):
     pos = caller.GetEventPosition()
     picker.PickProp(pos[0], pos[1], callback_function.ren)
     picked_actor = picker.GetActor()
-    pos = picker.GetPickPosition()
-    callback_function.info_box.setPlainText(f'{pos[0]}, {pos[1]}, {pos[2]}')
+    if picked_actor:
+        pos = picker.GetPickPosition()
+        callback_function.info_box.setPlainText(
+                f'3D Scene Position: {pos[0]:.2f}, {pos[1]:.2f}, {pos[2]:.2f}\n\n' +
+                load_next.descriptions[picked_actor])
+    else:
+        callback_function.info_box.setPlainText(
+                f'2D Window Position: {pos[0]:.2f}, {pos[1]:.2f}\n\n' +
+                'No actor picked')
 
 def load_next():
     if (load_next.i > len(load_next.json_doc['list']) - 1):
         print("No more scenes to render")
         return
+
     scene = load_next.json_doc['list'][load_next.i]['entities']
-    if 'reset' not in load_next.json_doc.keys() or load_next.json_doc['reset']:
-        if 'reset' not in load_next.json_doc['list'][load_next.i].keys() or\
-         load_next.json_doc['list'][load_next.i]['reset']:
-            load_next.positions = [[], [], []]
-            for actor in load_next.actors:
-                load_next.ren.RemoveActor(actor)
-    load_next.actors = []
+    if 'reset' in load_next.json_doc['list'][load_next.i]:
+        curr_reset_check = load_next.json_doc['list'][load_next.i]['reset']
+    else:
+        curr_reset_check = False
+    #print(load_next.actors)
+    if ('reset' not in load_next.json_doc.keys() or\
+            load_next.json_doc['reset']) or\
+            curr_reset_check:
+        load_next.positions = [[], [], []]
+        for actor in load_next.actors:
+            load_next.ren.RemoveActor(actor)
+        load_next.actors = []
     for entity in scene:
         for i in range(len(entity['position'])):
             load_next.positions[i % 3].append(entity['position'][i])
+        actor = None
         if entity['type'] == 'point':
             source = vtk.vtkSphereSource()
-            source.SetRadius(0.1)
+            source.SetRadius(SPHERE_RADIUS)
             source.SetCenter(entity['position'])
             mapper = vtk.vtkPolyDataMapper()
             mapper.SetInputConnection(source.GetOutputPort())
@@ -139,14 +155,16 @@ def load_next():
             #glyph.SetScaleFactor(size);
             #glyph.OrientOn();
             #glyph.Update();
+        if actor:
+            load_next.descriptions[actor] = entity['description']
 
     cube_axis = vtk.vtkCubeAxesActor()
     cube_axis.SetCamera(load_next.ren.GetActiveCamera());
     mins = [min(i) for i in load_next.positions]
     maxs = [max(i) for i in load_next.positions]
     dists = [i[0] - i[1] for i in zip(maxs, mins)]
-    mins = [i[0] - min(TUBE_RADIUS, i[1] * 0.1) for i in zip(mins, dists)]
-    maxs = [i[0] + min(TUBE_RADIUS, i[1] * 0.1) for i in zip(maxs, dists)]
+    mins = [i[0] - max(SPHERE_RADIUS, i[1] * 0.1) for i in zip(mins, dists)]
+    maxs = [i[0] + max(SPHERE_RADIUS, i[1] * 0.1) for i in zip(maxs, dists)]
     cube_axis.SetFlyModeToStaticEdges()
     cube_axis.SetBounds((mins[0], maxs[0], mins[1], maxs[1],
         mins[2], maxs[2]))
