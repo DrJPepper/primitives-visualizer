@@ -85,7 +85,7 @@ def callback_function(caller, ev):
         pos = picker.GetPickPosition()
         callback_function.info_box.setPlainText(
                 f'3D Scene Position: {pos[0]:.2f}, {pos[1]:.2f}, {pos[2]:.2f}\n\n' +
-                load_next.descriptions[picked_actor])
+                str(load_next.descriptions[picked_actor]))
     else:
         callback_function.info_box.setPlainText(
                 f'2D Window Position: {pos[0]:.2f}, {pos[1]:.2f}\n\n' +
