@@ -4,8 +4,6 @@ import argparse
 from pathlib import Path
 from copy import copy
 
-import numpy as np
-
 from PyQt5.QtWidgets import QApplication, QLabel, QMainWindow, QPushButton
 from PyQt5.QtCore import QFile, QIODevice
 from PyQt5.uic import loadUi
