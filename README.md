@@ -74,8 +74,8 @@ to be as follows:
                         ],
                         "type": "vector"
                     }
-                ]
-                "hold": true,
+                ],
+                "hold": true
             },
             {
                 "entities": [
@@ -111,8 +111,6 @@ to be as follows:
                     }
                 ]
             }
-            ],
-        }
         ],
         "reset": true
     }
