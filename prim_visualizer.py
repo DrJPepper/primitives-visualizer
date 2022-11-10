@@ -1,5 +1,8 @@
 import sys
 import json
+import argparse
+from pathlib import Path
+from copy import copy
 
 import numpy as np
 
@@ -9,14 +12,40 @@ from PyQt5.uic import loadUi
 from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 import vtk
 
-TUBE_RADIUS = 0.05
-SPHERE_RADIUS = 0.1
+TUBE_RADIUS_DEFAULT = 0.05
+SPHERE_RADIUS_DEFAULT = 0.1
 
 # Subclass QMainWindow similarly to in C++
 class MainWindow(QMainWindow):
 
     def __init__(self, parent = None):
         QMainWindow.__init__(self, parent)
+
+        parser = argparse.ArgumentParser(
+                prog = 'PrimitivesVisualizer',
+                description = 'Visualizes 3D geometry from a JSON file',
+                epilog = 'Filename can also be specified in ./default_input.txt'
+                )
+        parser.add_argument('-f', '--filename', required=False)
+        parser.add_argument('-t', '--tube-radius', required=False, type=float)
+        parser.add_argument('-s', '--sphere-radius', required=False, type=float)
+        args = parser.parse_args()
+        if args.filename is None:
+            default_file = Path("./default_input.txt")
+            if default_file.is_file():
+                filename = open("./default_input.txt").readline().strip()
+            else:
+                print("Error: no input file name supplied")
+                parser.print_help()
+                exit(1)
+        else:
+            filename = args.filename
+        tube_radius = TUBE_RADIUS_DEFAULT
+        sphere_radius = SPHERE_RADIUS_DEFAULT
+        if args.tube_radius is not None:
+            tube_radius = args.tube_radius
+        if args.sphere_radius is not None:
+            sphere_radius = args.sphere_radius
 
         # Load the .ui file and associate its content with this MainWindow
         loadUi("window.ui", self)
@@ -52,22 +81,24 @@ class MainWindow(QMainWindow):
         # Set up callback
         self.iren.AddObserver('LeftButtonPressEvent', callback_function)
 
-        #json_doc = json.load(open('../4d_multilayer_modeler/build/out.json'))
-        json_doc = json.load(open('../tissue_sim/build/out.json'))
-        #print(json_doc)
+        json_doc = json.load(open(filename))
         self.runallButton.clicked.connect(run_all)
         self.continueButton.clicked.connect(load_next)
+        # Associate a lot of persistent information with load_next
         load_next.i = 0
         load_next.ren = self.ren
         load_next.json_doc = json_doc
         load_next.actors = []
+        load_next.hold_actors = []
         load_next.positions = [[], [], []]
+        load_next.hold_positions = [[], [], []]
         load_next.cube_axis = None
         load_next.descriptions = {}
+        load_next.tube_radius = tube_radius
+        load_next.sphere_radius = sphere_radius
         reset_camera()
         self.show()
         load_next()
-        #self.iren.Initialize()
 
 def export_scene():
     export_scene.exporter.Update()
@@ -76,6 +107,9 @@ def reset_camera():
     reset_camera.ren.ResetCamera()
     reset_camera.renWin.Render()
 
+"""
+Prints information on the selected entity to an info box in the GUI
+"""
 def callback_function(caller, ev):
     picker = vtk.vtkPropPicker()
     pos = caller.GetEventPosition()
@@ -91,35 +125,51 @@ def callback_function(caller, ev):
                 f'2D Window Position: {pos[0]:.2f}, {pos[1]:.2f}\n\n' +
                 'No actor picked')
 
+"""
+Runs through all entities in the list (not an instantaneous process)
+"""
 def run_all():
     while load_next.i < len(load_next.json_doc['list']):
         load_next()
 
+"""
+Loads the next entity into the scene, and clears it if appropriate
+"""
 def load_next():
     if load_next.i > len(load_next.json_doc['list']) - 1:
         print("No more scenes to render")
         return
 
-    scene = load_next.json_doc['list'][load_next.i]['entities']
-    if 'reset' in load_next.json_doc['list'][load_next.i]:
-        curr_reset_check = load_next.json_doc['list'][load_next.i]['reset']
+    curr = load_next.json_doc['list'][load_next.i]
+    # List of entities to process
+    scene = curr['entities']
+    # Whether this scene should be persistent through resets
+    hold = 'hold' in curr.keys() and curr['hold']
+    if 'reset' in curr:
+        curr_reset_check = curr['reset']
     else:
         curr_reset_check = False
-    #print(load_next.actors)
+    # Perform a reset if requested
     if ('reset' not in load_next.json_doc.keys() or\
             load_next.json_doc['reset']) or\
             curr_reset_check:
-        load_next.positions = [[], [], []]
+        load_next.positions = copy(load_next.hold_positions)
         for actor in load_next.actors:
-            load_next.ren.RemoveActor(actor)
+            # Hold the actors marked as such
+            if actor not in load_next.hold_actors:
+                load_next.ren.RemoveActor(actor)
         load_next.actors = []
+    # Process every entity within this scene/JSON entry
     for entity in scene:
+        # Determine how large to make the axes
         for i in range(len(entity['position'])):
             load_next.positions[i % 3].append(entity['position'][i])
+            if hold:
+                load_next.hold_positions[i % 3].append(entity['position'][i])
         actor = None
         if entity['type'] == 'point':
             source = vtk.vtkSphereSource()
-            source.SetRadius(SPHERE_RADIUS)
+            source.SetRadius(load_next.sphere_radius)
             source.SetCenter(entity['position'])
             mapper = vtk.vtkPolyDataMapper()
             mapper.SetInputConnection(source.GetOutputPort())
@@ -128,8 +178,6 @@ def load_next():
             actor.SetMapper(mapper)
             actor.GetProperty().SetColor(entity['color'])
             actor.GetProperty().SetOpacity(entity['opacity'])
-            load_next.ren.AddActor(actor)
-            load_next.actors.append(actor)
         elif entity['type'] == 'vector':
             line_source = vtk.vtkLineSource()
             line_source.SetPoint1(entity['position'][:3])
@@ -139,39 +187,29 @@ def load_next():
             tube_filter = vtk.vtkTubeFilter()
             tube_filter.SetInputConnection(line_source.GetOutputPort())
             tube_filter.SetNumberOfSides(8)
-            tube_filter.SetRadius(TUBE_RADIUS)
+            tube_filter.SetRadius(load_next.tube_radius)
             tube_filter.Update()
-            #arrow = vtk.vtkArrowSource()
-            #arrow.SetTipResolution(16)
-            #arrow.SetTipLength(0.3)
-            #arrow.SetTipRadius(0.1)
-            #glyph = vtk.vtkGlyph3D()
-            #glyph.SetSourceConnection(arrow.GetOutputPort())
-            #glyph.SetInputData(tube_filter.GetOutput())
             mapper = vtk.vtkPolyDataMapper()
-            #mapper.SetInputConnection(glyph.GetOutputPort())
             mapper.SetInputConnection(tube_filter.GetOutputPort())
             actor = vtk.vtkActor()
             actor.SetMapper(mapper)
             actor.GetProperty().SetColor(entity['color'])
             actor.GetProperty().SetOpacity(entity['opacity'])
-            load_next.ren.AddActor(actor)
-            load_next.actors.append(actor)
-            #glyph.SetVectorModeToUseNormal();
-            #glyph.SetScaleModeToScaleByVector();
-            #glyph.SetScaleFactor(size);
-            #glyph.OrientOn();
-            #glyph.Update();
+        load_next.ren.AddActor(actor)
+        load_next.actors.append(actor)
+        if hold:
+            load_next.hold_actors.append(actor)
         if actor:
             load_next.descriptions[actor] = entity['description']
 
+    # Make the axes actor to the correct sizing based on the elements on screen
     cube_axis = vtk.vtkCubeAxesActor()
     cube_axis.SetCamera(load_next.ren.GetActiveCamera());
     mins = [min(i) for i in load_next.positions]
     maxs = [max(i) for i in load_next.positions]
     dists = [i[0] - i[1] for i in zip(maxs, mins)]
-    mins = [i[0] - max(SPHERE_RADIUS, i[1] * 0.1) for i in zip(mins, dists)]
-    maxs = [i[0] + max(SPHERE_RADIUS, i[1] * 0.1) for i in zip(maxs, dists)]
+    mins = [i[0] - max(load_next.sphere_radius, i[1] * 0.1) for i in zip(mins, dists)]
+    maxs = [i[0] + max(load_next.sphere_radius, i[1] * 0.1) for i in zip(maxs, dists)]
     cube_axis.SetFlyModeToStaticEdges()
     cube_axis.SetBounds((mins[0], maxs[0], mins[1], maxs[1],
         mins[2], maxs[2]))
@@ -183,8 +221,6 @@ def load_next():
     load_next.i += 1
 
     reset_camera()
-    #self.show()
-    #self.iren.Initialize()
 
 def main():
     app = QApplication(sys.argv)
