@@ -44,7 +44,7 @@ to be as follows:
                             1.0,
                             1.0
                         ],
-                        "description": "Edge with rest length 0.999978 with:\n\tVertex at: 13.856     18      0\n\tVertex at: 14.722   18.5      0\n\nIndex: 347",
+                        "description": "Edge with rest length 0.999978\nIndex: 347",
                         "hold": true,
                         "opacity": 1.0,
                         "position": [
@@ -63,7 +63,7 @@ to be as follows:
                             1.0,
                             1.0
                         ],
-                        "description": "Edge with rest length 0.999978 with:\n\tVertex at: 13.856     18      1\n\tVertex at: 14.722   18.5      1\n\nIndex: 723",
+                        "description": "Edge with rest length 0.999978\nIndex: 723",
                         "opacity": 1.0,
                         "position": [
                             13.856,
