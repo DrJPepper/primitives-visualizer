@@ -1,6 +1,7 @@
 # Primitives Visualizer
 
-**TODO**: Add some screenshots/gifs
+![Screenshot 1](https://www.cs.drexel.edu/~jcp353/images/s1.png "Screenshot 1")
+**TODO**: Add more screenshots/gifs
 
 This program visualizes basic 3D geometric primitives (currently, tubes and
 spheres) in a VTK window as they are described in a JSON input file. Its purpose
