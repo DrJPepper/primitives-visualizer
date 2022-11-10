@@ -32,6 +32,55 @@ to be as follows:
     - `"hold"`: A Boolean that can be used to tell the program to hold the
       primitives in this entry even if a reset occurs.
 
+## Example JSON
+
+    {
+        "list": [
+            {
+                "entities": [
+                    {
+                        "color": [
+                            1.0,
+                            1.0,
+                            1.0
+                        ],
+                        "description": "Edge with rest length 0.999978 with:\n\tVertex at: 13.856     18      0\n\tVertex at: 14.722   18.5      0\n\nIndex: 347",
+                        "hold": true,
+                        "opacity": 1.0,
+                        "position": [
+                            13.856,
+                            18.0,
+                            0.0,
+                            14.722,
+                            18.5,
+                            0.0
+                        ],
+                        "type": "vector"
+                    },
+                    {
+                        "color": [
+                            1.0,
+                            1.0,
+                            1.0
+                        ],
+                        "description": "Edge with rest length 0.999978 with:\n\tVertex at: 13.856     18      1\n\tVertex at: 14.722   18.5      1\n\nIndex: 723",
+                        "opacity": 1.0,
+                        "position": [
+                            13.856,
+                            18.0,
+                            1.0,
+                            14.722,
+                            18.5,
+                            1.0
+                        ],
+                        "type": "vector"
+                    }
+                ]
+            }
+        ],
+        "reset": true
+    }
+
 ## Running
 `python3 prim_visualizer.py`, with the following optional arguments:
 
