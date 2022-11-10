@@ -25,7 +25,9 @@ to be as follows:
       tube that correspond to the centroid of the sphere or the endpoints of the
       central axis of the tube respectively.
     - `"type"`: Either `"point"` or `"vector"`.
+
   These entities may optionally contain:
+
     - `"reset"`: A Boolean that overrides the global `reset` key.
     - `"hold"`: A Boolean that can be used to tell the program to hold the
       primitives in this entry even if a reset occurs.
