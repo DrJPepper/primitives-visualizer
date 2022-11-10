@@ -45,7 +45,6 @@ to be as follows:
                             1.0
                         ],
                         "description": "Edge with rest length 0.999978\nIndex: 347",
-                        "hold": true,
                         "opacity": 1.0,
                         "position": [
                             13.856,
@@ -76,7 +75,44 @@ to be as follows:
                         "type": "vector"
                     }
                 ]
+                "hold": true,
+            },
+            {
+                "entities": [
+                    {
+                        "color": [
+                            1.0,
+                            1.0,
+                            1.0
+                        ],
+                        "description": "Vertex at: 0 0 0\n\nIndex: 0",
+                        "opacity": 1.0,
+                        "position": [
+                            0.0,
+                            0.0,
+                            0.0
+                        ],
+                        "type": "point"
+                    },
+                    {
+                        "color": [
+                            1.0,
+                            1.0,
+                            1.0
+                        ],
+                        "description": "Vertex at: 1.732     0     0\n\nIndex: 1",
+                        "opacity": 1.0,
+                        "position": [
+                            1.732,
+                            0.0,
+                            0.0
+                        ],
+                        "type": "point"
+                    }
+                ]
             }
+            ],
+        }
         ],
         "reset": true
     }
