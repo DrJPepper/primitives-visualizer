@@ -2,7 +2,7 @@ import sys
 import json
 import argparse
 from pathlib import Path
-from copy import copy
+from copy import deepcopy
 
 from PyQt5.QtWidgets import QApplication, QLabel, QMainWindow, QPushButton
 from PyQt5.QtCore import QFile, QIODevice
@@ -151,7 +151,7 @@ def load_next():
     if ('reset' not in load_next.json_doc.keys() or\
             load_next.json_doc['reset']) or\
             curr_reset_check:
-        load_next.positions = copy(load_next.hold_positions)
+        load_next.positions = deepcopy(load_next.hold_positions)
         for actor in load_next.actors:
             # Hold the actors marked as such
             if actor not in load_next.hold_actors:
