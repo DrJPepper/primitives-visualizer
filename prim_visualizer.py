@@ -24,6 +24,8 @@ class MainWindow(QMainWindow):
                 description = 'Visualizes 3D geometry from a JSON file',
                 epilog = 'Filename can also be specified in ./default_input.txt'
                 )
+        parser.add_argument('-b', '--basic-mode', required=False,
+                            action=argparse.BooleanOptionalAction)
         parser.add_argument('-f', '--filename', required=False)
         parser.add_argument('-t', '--tube-radius', required=False, type=float)
         parser.add_argument('-s', '--sphere-radius', required=False, type=float)
@@ -73,30 +75,38 @@ class MainWindow(QMainWindow):
         export_scene.exporter = self.exporter
         self.exportButton.clicked.connect(export_scene)
 
-        # Associate needed objects with the callback function object itself
-        callback_function.ren = self.ren
-        callback_function.info_box = self.infoBox
-        # Set up callback
-        self.iren.AddObserver('LeftButtonPressEvent', callback_function)
 
-        json_doc = json.load(open(filename))
-        self.runallButton.clicked.connect(run_all)
-        self.continueButton.clicked.connect(load_next)
-        # Associate a lot of persistent information with load_next
-        load_next.i = 0
-        load_next.ren = self.ren
-        load_next.json_doc = json_doc
-        load_next.actors = []
-        load_next.hold_actors = []
-        load_next.positions = [[], [], []]
-        load_next.hold_positions = [[], [], []]
-        load_next.cube_axis = None
-        load_next.descriptions = {}
-        load_next.tube_radius = tube_radius
-        load_next.sphere_radius = sphere_radius
         reset_camera()
         self.show()
-        load_next()
+        if args.basic_mode:
+            load_basic_scene.ren = self.ren
+            load_basic_scene.filename = filename
+            load_basic_scene.tube_radius = tube_radius
+            load_basic_scene.sphere_radius = sphere_radius
+            load_basic_scene.done = False
+            load_basic_scene()
+        else:
+            # Associate needed objects with the callback function object itself
+            callback_function.ren = self.ren
+            callback_function.info_box = self.infoBox
+            # Set up callback
+            self.iren.AddObserver('LeftButtonPressEvent', callback_function)
+            self.runallButton.clicked.connect(run_all)
+            self.continueButton.clicked.connect(load_next)
+            json_doc = json.load(open(filename))
+            # Associate a lot of persistent information with load_next
+            load_next.i = 0
+            load_next.ren = self.ren
+            load_next.json_doc = json_doc
+            load_next.actors = []
+            load_next.hold_actors = []
+            load_next.positions = [[], [], []]
+            load_next.hold_positions = [[], [], []]
+            load_next.cube_axis = None
+            load_next.descriptions = {}
+            load_next.tube_radius = tube_radius
+            load_next.sphere_radius = sphere_radius
+            load_next()
 
 def export_scene():
     export_scene.exporter.Update()
@@ -129,6 +139,68 @@ Runs through all entities in the list (not an instantaneous process)
 def run_all():
     while load_next.i < len(load_next.json_doc['list']):
         load_next()
+
+"""
+Loads basic mode scene
+"""
+def load_basic_scene():
+    if load_basic_scene.done:
+        print("No more scenes to render")
+        return
+    scene = [[float(j) for j in i.strip().split(',')] for i in
+           open(load_basic_scene.filename).readlines()]
+    positions = [[], [], []]
+    for entity in scene:
+        if len(entity) == 6:
+            for i in range(3):
+                positions[i].append(entity[i+3])
+        for i in range(3):
+            positions[i].append(entity[i])
+        actor = None
+        if len(entity) == 3:
+            source = vtk.vtkSphereSource()
+            source.SetRadius(load_basic_scene.sphere_radius)
+            source.SetCenter(entity)
+            mapper = vtk.vtkPolyDataMapper()
+            mapper.SetInputConnection(source.GetOutputPort())
+
+            actor = vtk.vtkActor()
+            actor.SetMapper(mapper)
+            #actor.GetProperty().SetColor(entity['color'])
+            #actor.GetProperty().SetOpacity(entity['opacity'])
+        elif len(entity) == 6:
+            line_source = vtk.vtkLineSource()
+            line_source.SetPoint1(entity[:3])
+            line_source.SetPoint2(entity[3:])
+            line_source.SetResolution(6)
+            line_source.Update()
+            tube_filter = vtk.vtkTubeFilter()
+            tube_filter.SetInputConnection(line_source.GetOutputPort())
+            tube_filter.SetNumberOfSides(8)
+            tube_filter.SetRadius(load_basic_scene.tube_radius)
+            tube_filter.Update()
+            mapper = vtk.vtkPolyDataMapper()
+            mapper.SetInputConnection(tube_filter.GetOutputPort())
+            actor = vtk.vtkActor()
+            actor.SetMapper(mapper)
+            #actor.GetProperty().SetColor(entity['color'])
+            #actor.GetProperty().SetOpacity(entity['opacity'])
+        load_basic_scene.ren.AddActor(actor)
+
+    # Make the axes actor to the correct sizing based on the elements on screen
+    cube_axis = vtk.vtkCubeAxesActor()
+    cube_axis.SetCamera(load_basic_scene.ren.GetActiveCamera());
+    mins = [min(i) for i in positions]
+    maxs = [max(i) for i in positions]
+    dists = [i[0] - i[1] for i in zip(maxs, mins)]
+    mins = [i[0] - max(load_basic_scene.sphere_radius, i[1] * 0.1) for i in zip(mins, dists)]
+    maxs = [i[0] + max(load_basic_scene.sphere_radius, i[1] * 0.1) for i in zip(maxs, dists)]
+    cube_axis.SetFlyModeToStaticEdges()
+    cube_axis.SetBounds((mins[0], maxs[0], mins[1], maxs[1],
+        mins[2], maxs[2]))
+    load_basic_scene.ren.AddActor(cube_axis)
+
+    reset_camera()
 
 """
 Loads the next entity into the scene, and clears it if appropriate
