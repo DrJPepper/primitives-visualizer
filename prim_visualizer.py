@@ -149,10 +149,10 @@ def load_basic_scene():
         return
     try:
         scene = [[float(j) for j in i.strip().split(',')] for i in
-               open(load_basic_scene.filename).readlines()]
+               open(load_basic_scene.filename).readlines() if i != '\n']
     except ValueError:
         scene = [[float(j) for j in i.strip().split()] for i in
-               open(load_basic_scene.filename).readlines()]
+               open(load_basic_scene.filename).readlines() if i != '\n']
     positions = [[], [], []]
     for entity in scene:
         if len(entity) == 6:
