@@ -147,8 +147,12 @@ def load_basic_scene():
     if load_basic_scene.done:
         print("No more scenes to render")
         return
-    scene = [[float(j) for j in i.strip().split(',')] for i in
-           open(load_basic_scene.filename).readlines()]
+    try:
+        scene = [[float(j) for j in i.strip().split(',')] for i in
+               open(load_basic_scene.filename).readlines()]
+    except ValueError:
+        scene = [[float(j) for j in i.strip().split()] for i in
+               open(load_basic_scene.filename).readlines()]
     positions = [[], [], []]
     for entity in scene:
         if len(entity) == 6:
@@ -290,7 +294,8 @@ def load_next():
 
     load_next.i += 1
 
-    reset_camera()
+    #reset_camera()
+    reset_camera.renWin.Render()
 
 def main():
     app = QApplication(sys.argv)
