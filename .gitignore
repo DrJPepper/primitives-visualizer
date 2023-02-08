@@ -132,3 +132,5 @@ dmypy.json
 *.txt
 *.obj
 *.mtl
+*.stl
+reduce_faces.py
