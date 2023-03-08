@@ -26,6 +26,8 @@ class MainWindow(QMainWindow):
                 )
         parser.add_argument('-b', '--basic-mode', required=False,
                             action=argparse.BooleanOptionalAction)
+        parser.add_argument('-n', '--no-reset', required=False,
+                            action=argparse.BooleanOptionalAction)
         parser.add_argument('-f', '--filename', required=False)
         parser.add_argument('-t', '--tube-radius', required=False, type=float)
         parser.add_argument('-s', '--sphere-radius', required=False, type=float)
@@ -78,6 +80,12 @@ class MainWindow(QMainWindow):
 
         reset_camera()
         self.show()
+        # Associate needed objects with the callback function object itself
+        callback_function.ren = self.ren
+        callback_function.info_box = self.infoBox
+        callback_function.basic = args.basic_mode
+        # Set up callback
+        self.iren.AddObserver('LeftButtonPressEvent', callback_function)
         if args.basic_mode:
             load_basic_scene.ren = self.ren
             load_basic_scene.filename = filename
@@ -86,15 +94,11 @@ class MainWindow(QMainWindow):
             load_basic_scene.done = False
             load_basic_scene()
         else:
-            # Associate needed objects with the callback function object itself
-            callback_function.ren = self.ren
-            callback_function.info_box = self.infoBox
-            # Set up callback
-            self.iren.AddObserver('LeftButtonPressEvent', callback_function)
             self.runallButton.clicked.connect(run_all)
             self.continueButton.clicked.connect(load_next)
             json_doc = json.load(open(filename))
             # Associate a lot of persistent information with load_next
+            load_next.reset = not args.no_reset
             load_next.i = 0
             load_next.ren = self.ren
             load_next.json_doc = json_doc
@@ -125,9 +129,10 @@ def callback_function(caller, ev):
     picked_actor = picker.GetActor()
     if picked_actor:
         pos = picker.GetPickPosition()
-        callback_function.info_box.setPlainText(
-                f'3D Scene Position: {pos[0]:.2f}, {pos[1]:.2f}, {pos[2]:.2f}\n\n' +
-                str(load_next.descriptions[picked_actor]))
+        string = f'3D Scene Position: {pos[0]:.2f}, {pos[1]:.2f}, {pos[2]:.2f}\n\n'
+        if not callback_function.basic:
+            string += str(load_next.descriptions[picked_actor])
+        callback_function.info_box.setPlainText(string)
     else:
         callback_function.info_box.setPlainText(
                 f'2D Window Position: {pos[0]:.2f}, {pos[1]:.2f}\n\n' +
@@ -294,7 +299,8 @@ def load_next():
 
     load_next.i += 1
 
-    #reset_camera()
+    if (load_next.i == 1 or load_next.reset):
+        reset_camera()
     reset_camera.renWin.Render()
 
 def main():
