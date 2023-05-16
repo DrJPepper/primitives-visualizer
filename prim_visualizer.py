@@ -85,8 +85,13 @@ class MainWindow(QMainWindow):
         callback_function.ren = self.ren
         callback_function.info_box = self.infoBox
         callback_function.basic = args.basic_mode
+        json_doc = None
         # Set up callback
-        self.iren.AddObserver('LeftButtonPressEvent', callback_function)
+        if not args.basic_mode:
+            json_doc = json.load(open(filename))
+            if "glyph" not in json_doc.keys() or not json_doc["glyph"]:
+                self.iren.AddObserver(
+                        'LeftButtonPressEvent', callback_function)
         if args.basic_mode:
             load_basic_scene.ren = self.ren
             load_basic_scene.filename = filename
@@ -97,7 +102,7 @@ class MainWindow(QMainWindow):
         else:
             self.runallButton.clicked.connect(run_all)
             self.continueButton.clicked.connect(load_next)
-            json_doc = json.load(open(filename))
+            #json_doc = json.load(open(filename))
             #print(json_doc.keys())
             # Associate a lot of persistent information with load_next
             load_next.reset = not args.no_reset
@@ -261,11 +266,24 @@ def load_next():
     # Process every entity within this scene/JSON entry
     for entity in scene:
         # Determine how large to make the axes
+        #try:
         for i in range(len(entity['position'])):
-            load_next.positions[i % 3].append(entity['position'][i])
+            if type(entity['position'][i]) is float:
+                load_next.positions[i % 3].append(entity['position'][i])
+            else:
+                for j in range(len(entity['position'][i])):
+                    load_next.positions[j].append(entity['position'][i][j])
             if hold:
-                load_next.hold_positions[i % 3].append(
-                        entity['position'][i])
+                if type(entity['position']) is int:
+                    load_next.positions[i % 3].append(
+                            entity['position'][i])
+                else:
+                    for j in range(len(entity['position'][i])):
+                        load_next.positions[j].append(
+                                entity['position'][i][j])
+        #except:
+        #    print(entity)
+        #    exit(1)
     if "glyph" in load_next.json_doc.keys() and load_next.json_doc["glyph"]:
         sphere_source = vtk.vtkSphereSource()
         #sphere_source.SetRadius(load_next.sphere_radius)
@@ -293,13 +311,13 @@ def load_next():
 
         n = 0
         for entity in scene:
+            if 'opacity' not in entity.keys():
+                entity['opacity'] = 1.0
+            if 'color' not in entity.keys():
+                entity['color'] = [1.0, 1.0, 1.0]
             if entity['type'] == 'point':
                 #source.SetCenter(entity['position'])
                 sphere_points.InsertNextPoint(entity['position'])
-                if 'opacity' not in entity.keys():
-                    entity['opacity'] = 1.0
-                if 'color' not in entity.keys():
-                    entity['color'] = [1.0, 1.0, 1.0]
                 colors_sphere.InsertNextTuple4(*entity['color'],
                                                entity['opacity'])
                 if 'radius' not in entity.keys():
@@ -316,10 +334,6 @@ def load_next():
                 line.GetPointIds().SetId(1, n+1)
                 n += 2
                 lines_cells.InsertNextCell(line)
-                if 'opacity' not in entity.keys():
-                    entity['opacity'] = 1.0
-                if 'color' not in entity.keys():
-                    entity['color'] = [1.0, 1.0, 1.0]
                 if 'radius' not in entity.keys():
                     entity['radius'] = load_next.tube_radius
                 # This is not working as cell data, only point data,
@@ -328,48 +342,21 @@ def load_next():
                     colors_line.InsertNextTuple4(*entity['color'],
                                                    entity['opacity'])
                     scale_factors_line.InsertNextTuple1(entity['radius'])
-                #for( int i = 0; i < lines.rows(); i++)
-                #{
-                #    auto row = lines.row(i);
-                #    for (int j=0; j<3; j++) {
-                #        vtkNew<vtkLine> line;
-                #        line->GetPointIds()->SetId(0, row(j));
-                #        line->GetPointIds()->SetId(1, row((j+1)%3));
-                #        vtkLines->InsertNextCell(line);
-                #    }
-                #}
-                #line_source = vtk.vtkLineSource()
-                #line_source.SetPoint1(entity['position'][:3])
-                #line_source.SetPoint2(entity['position'][3:])
-                #line_source.SetResolution(6)
-                #line_source.Update()
-                #tube_filter = vtk.vtkTubeFilter()
-                #tube_filter.SetInputConnection(line_source.GetOutputPort())
-                #tube_filter.SetNumberOfSides(8)
-                #tube_filter.SetRadius(load_next.tube_radius)
-                #tube_filter.Update()
-                #mapper = vtk.vtkPolyDataMapper()
-                #mapper.SetInputConnection(tube_filter.GetOutputPort())
-                #actor = vtk.vtkActor()
-                #actor.SetMapper(mapper)
-                #actor.GetProperty().SetColor(entity['color'])
-                #actor.GetProperty().SetOpacity(entity['opacity'])
-            #if len(entity) == 6:
-            #    for i in range(3):
-            #        positions[i].append(entity[i+3])
-            #for i in range(3):
-            #    positions[i].append(entity[i])
-            #actor = None
-            #if len(entity) == 3:
-            #    sphere_points.InsertNextPoint(entity)
-            #elif len(entity) == 6:
-            #    lines_points.InsertNextPoint(entity[:3])
-            #    lines_points.InsertNextPoint(entity[3:])
-            #    line = vtk.vtkLine()
-            #    line.GetPointIds().SetId(0, n)
-            #    line.GetPointIds().SetId(1, n+1)
-            #    lines_cells.InsertNextCell(line)
-            #    n += 2
+            elif entity['type'] == 'polyline':
+                line = vtk.vtkPolyLine()
+                id_count = len(entity['position'])
+                line.GetPointIds().SetNumberOfIds(id_count)
+                if 'radius' not in entity.keys():
+                    entity['radius'] = load_next.tube_radius
+                for i in range(id_count):
+                    pt = entity['position'][i]
+                    lines_points.InsertNextPoint(pt)
+                    line.GetPointIds().SetId(i, n)
+                    n += 1
+                    colors_line.InsertNextTuple4(*entity['color'],
+                                                   entity['opacity'])
+                    scale_factors_line.InsertNextTuple1(entity['radius'])
+                lines_cells.InsertNextCell(line)
 
         sphere_pd.SetPoints(sphere_points)
         mapper = vtk.vtkGlyph3DMapper()
@@ -411,6 +398,7 @@ def load_next():
         actor = vtk.vtkActor()
         actor.SetMapper(mapper)
         load_next.ren.AddActor(actor)
+        load_next.actors.append(actor)
 
     #linesPolyData->GetCellData()->SetScalars(colors);
     #vtkNew<vtkTubeFilter> tubeFilter;
