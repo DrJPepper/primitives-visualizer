@@ -24,15 +24,14 @@ class MainWindow(QMainWindow):
                 description = 'Visualizes 3D geometry from a JSON file',
                 epilog = 'Filename can also be specified in ./default_input.txt'
                 )
-        parser.add_argument('-j', '--json-mode', required=False,
-                            action=argparse.BooleanOptionalAction)
         parser.add_argument('-b', '--basic-mode', required=False,
                             action=argparse.BooleanOptionalAction)
         parser.add_argument('-n', '--no-reset', required=False,
                             action=argparse.BooleanOptionalAction)
         parser.add_argument('-f', '--filename', required=False)
         parser.add_argument('-t', '--tube-radius', required=False, type=float)
-        parser.add_argument('-s', '--sphere-radius', required=False, type=float)
+        parser.add_argument('-s', '--sphere-radius', required=False,
+                            type=float)
         args = parser.parse_args()
         if args.filename is None:
             default_file = Path("./default_input.txt")
@@ -88,14 +87,7 @@ class MainWindow(QMainWindow):
         callback_function.basic = args.basic_mode
         # Set up callback
         self.iren.AddObserver('LeftButtonPressEvent', callback_function)
-        if args.json_mode:
-            load_basic_scene.ren = self.ren
-            load_basic_scene.filename = filename
-            load_basic_scene.tube_radius = tube_radius
-            load_basic_scene.sphere_radius = sphere_radius
-            load_basic_scene.done = False
-            load_basic_scene()
-        elif args.basic_mode:
+        if args.basic_mode:
             load_basic_scene.ren = self.ren
             load_basic_scene.filename = filename
             load_basic_scene.tube_radius = tube_radius
@@ -106,7 +98,7 @@ class MainWindow(QMainWindow):
             self.runallButton.clicked.connect(run_all)
             self.continueButton.clicked.connect(load_next)
             json_doc = json.load(open(filename))
-            print(json_doc.keys())
+            #print(json_doc.keys())
             # Associate a lot of persistent information with load_next
             load_next.reset = not args.no_reset
             load_next.i = 0
@@ -228,8 +220,10 @@ def load_basic_scene():
     mins = [min(i) for i in positions]
     maxs = [max(i) for i in positions]
     dists = [i[0] - i[1] for i in zip(maxs, mins)]
-    mins = [i[0] - max(load_basic_scene.sphere_radius, i[1] * 0.1) for i in zip(mins, dists)]
-    maxs = [i[0] + max(load_basic_scene.sphere_radius, i[1] * 0.1) for i in zip(maxs, dists)]
+    mins = [i[0] - max(load_basic_scene.sphere_radius, i[1] * 0.1)
+            for i in zip(mins, dists)]
+    maxs = [i[0] + max(load_basic_scene.sphere_radius, i[1] * 0.1)
+            for i in zip(maxs, dists)]
     cube_axis.SetFlyModeToStaticEdges()
     cube_axis.SetBounds((mins[0], maxs[0], mins[1], maxs[1],
         mins[2], maxs[2]))
@@ -270,42 +264,172 @@ def load_next():
         for i in range(len(entity['position'])):
             load_next.positions[i % 3].append(entity['position'][i])
             if hold:
-                load_next.hold_positions[i % 3].append(entity['position'][i])
-        actor = None
-        if entity['type'] == 'point':
-            source = vtk.vtkSphereSource()
-            source.SetRadius(load_next.sphere_radius)
-            source.SetCenter(entity['position'])
-            mapper = vtk.vtkPolyDataMapper()
-            mapper.SetInputConnection(source.GetOutputPort())
+                load_next.hold_positions[i % 3].append(
+                        entity['position'][i])
+    if "glyph" in load_next.json_doc.keys() and load_next.json_doc["glyph"]:
+        sphere_source = vtk.vtkSphereSource()
+        #sphere_source.SetRadius(load_next.sphere_radius)
+        #sphere_source.SetRadius(.01)
+        sphere_pd = vtk.vtkPolyData()
+        sphere_points = vtk.vtkPoints()
 
-            actor = vtk.vtkActor()
-            actor.SetMapper(mapper)
-            actor.GetProperty().SetColor(entity['color'])
-            actor.GetProperty().SetOpacity(entity['opacity'])
-        elif entity['type'] == 'vector':
-            line_source = vtk.vtkLineSource()
-            line_source.SetPoint1(entity['position'][:3])
-            line_source.SetPoint2(entity['position'][3:])
-            line_source.SetResolution(6)
-            line_source.Update()
-            tube_filter = vtk.vtkTubeFilter()
-            tube_filter.SetInputConnection(line_source.GetOutputPort())
-            tube_filter.SetNumberOfSides(8)
-            tube_filter.SetRadius(load_next.tube_radius)
-            tube_filter.Update()
-            mapper = vtk.vtkPolyDataMapper()
-            mapper.SetInputConnection(tube_filter.GetOutputPort())
-            actor = vtk.vtkActor()
-            actor.SetMapper(mapper)
-            actor.GetProperty().SetColor(entity['color'])
-            actor.GetProperty().SetOpacity(entity['opacity'])
+        lines_pd = vtk.vtkPolyData()
+        lines_points = vtk.vtkPoints()
+        lines_cells = vtk.vtkCellArray()
+
+        scale_factors_sphere = vtk.vtkFloatArray();
+        scale_factors_sphere.SetNumberOfComponents(3);
+        scale_factors_sphere.SetName("Scale Factors");
+        colors_sphere = vtk.vtkFloatArray();
+        colors_sphere.SetNumberOfComponents(4);
+        colors_sphere.SetName("Colors");
+
+        scale_factors_line = vtk.vtkFloatArray();
+        scale_factors_line.SetNumberOfComponents(3);
+        scale_factors_line.SetName("Scale Factors");
+        colors_line = vtk.vtkFloatArray();
+        colors_line.SetNumberOfComponents(4);
+        colors_line.SetName("Colors");
+
+        n = 0
+        for entity in scene:
+            if entity['type'] == 'point':
+                #source.SetCenter(entity['position'])
+                sphere_points.InsertNextPoint(entity['position'])
+                if 'opacity' not in entity.keys():
+                    entity['opacity'] = 1.0
+                if 'color' not in entity.keys():
+                    entity['color'] = [1.0, 1.0, 1.0]
+                colors_sphere.InsertNextTuple4(*entity['color'],
+                                               entity['opacity'])
+                if 'radius' not in entity.keys():
+                    entity['radius'] = load_next.sphere_radius
+                scale_factors_sphere.InsertNextTuple3(
+                        *[entity['radius'] * 2 for _ in range(3)])
+                #actor.GetProperty().SetColor(entity['color'])
+                #actor.GetProperty().SetOpacity(entity['opacity'])
+            elif entity['type'] == 'vector':
+                pass
+                #for( int i = 0; i < lines.rows(); i++)
+                #{
+                #    auto row = lines.row(i);
+                #    for (int j=0; j<3; j++) {
+                #        vtkNew<vtkLine> line;
+                #        line->GetPointIds()->SetId(0, row(j));
+                #        line->GetPointIds()->SetId(1, row((j+1)%3));
+                #        vtkLines->InsertNextCell(line);
+                #    }
+                #}
+                #line_source = vtk.vtkLineSource()
+                #line_source.SetPoint1(entity['position'][:3])
+                #line_source.SetPoint2(entity['position'][3:])
+                #line_source.SetResolution(6)
+                #line_source.Update()
+                #tube_filter = vtk.vtkTubeFilter()
+                #tube_filter.SetInputConnection(line_source.GetOutputPort())
+                #tube_filter.SetNumberOfSides(8)
+                #tube_filter.SetRadius(load_next.tube_radius)
+                #tube_filter.Update()
+                #mapper = vtk.vtkPolyDataMapper()
+                #mapper.SetInputConnection(tube_filter.GetOutputPort())
+                #actor = vtk.vtkActor()
+                #actor.SetMapper(mapper)
+                #actor.GetProperty().SetColor(entity['color'])
+                #actor.GetProperty().SetOpacity(entity['opacity'])
+            #if len(entity) == 6:
+            #    for i in range(3):
+            #        positions[i].append(entity[i+3])
+            #for i in range(3):
+            #    positions[i].append(entity[i])
+            #actor = None
+            #if len(entity) == 3:
+            #    sphere_points.InsertNextPoint(entity)
+            #elif len(entity) == 6:
+            #    lines_points.InsertNextPoint(entity[:3])
+            #    lines_points.InsertNextPoint(entity[3:])
+            #    line = vtk.vtkLine()
+            #    line.GetPointIds().SetId(0, n)
+            #    line.GetPointIds().SetId(1, n+1)
+            #    lines_cells.InsertNextCell(line)
+            #    n += 2
+
+        sphere_pd.SetPoints(sphere_points)
+        mapper = vtk.vtkGlyph3DMapper()
+
+        #sphere_pd.GetCellData().SetScalars(colors_sphere);
+        #sphere_pd.GetCellData().SetScalars(scale_factors_sphere);
+        sphere_pd.GetPointData().AddArray(colors_sphere);
+        sphere_pd.GetPointData().AddArray(scale_factors_sphere);
+        mapper.SetInputData(sphere_pd)
+        mapper.SetSourceConnection(sphere_source.GetOutputPort())
+        mapper.SetScalarModeToUsePointFieldData()
+
+        mapper.SelectColorArray("Colors");
+        mapper.SetColorMode(2)
+
+        mapper.SetScaleModeToScaleByVectorComponents()
+        mapper.SetScaleArray("Scale Factors")
+        #mapper.ScalarVisibilityOff()
+        #mapper.ScalingOff()
+        mapper.Update()
+
+        actor = vtk.vtkActor()
+        actor.SetMapper(mapper)
         load_next.ren.AddActor(actor)
         load_next.actors.append(actor)
-        if hold:
-            load_next.hold_actors.append(actor)
-        if actor:
-            load_next.descriptions[actor] = entity['description']
+
+        #lines_pd.SetPoints(lines_points)
+        #lines_pd.SetLines(lines_cells)
+        #tube_filter = vtk.vtkTubeFilter()
+        #tube_filter.SetInputData(lines_pd);
+        #tube_filter.SetNumberOfSides(8)
+        #tube_filter.SetRadius(load_basic_scene.tube_radius)
+        #tube_filter.Update()
+        #mapper = vtk.vtkPolyDataMapper()
+        #mapper.SetInputConnection(tube_filter.GetOutputPort())
+        #actor = vtk.vtkActor()
+        #actor.SetMapper(mapper)
+        #load_basic_scene.ren.AddActor(actor)
+    else:
+        for entity in scene:
+            actor = vtk.vtkActor()
+            mapper = vtk.vtkPolyDataMapper()
+            if 'opacity' not in entity.keys():
+                entity['opacity'] = 1.0
+            if 'color' not in entity.keys():
+                entity['color'] = [1.0, 1.0, 1.0]
+            if 'description' not in entity.keys():
+                entity['description'] = "No entity description provided"
+            if entity['type'] == 'point':
+                if 'radius' not in entity.keys():
+                    entity['radius'] = load_next.sphere_radius
+                source = vtk.vtkSphereSource()
+                source.SetRadius(entity['radius'])
+                source.SetCenter(entity['position'])
+                mapper.SetInputConnection(source.GetOutputPort())
+            elif entity['type'] == 'vector':
+                if 'radius' not in entity.keys():
+                    entity['radius'] = load_next.tube_radius
+                line_source = vtk.vtkLineSource()
+                line_source.SetPoint1(entity['position'][:3])
+                line_source.SetPoint2(entity['position'][3:])
+                line_source.SetResolution(6)
+                line_source.Update()
+                tube_filter = vtk.vtkTubeFilter()
+                tube_filter.SetInputConnection(line_source.GetOutputPort())
+                tube_filter.SetNumberOfSides(8)
+                tube_filter.SetRadius(entity['radius'])
+                tube_filter.Update()
+                mapper.SetInputConnection(tube_filter.GetOutputPort())
+            actor.SetMapper(mapper)
+            actor.GetProperty().SetColor(entity['color'])
+            actor.GetProperty().SetOpacity(entity['opacity'])
+            load_next.ren.AddActor(actor)
+            load_next.actors.append(actor)
+            if hold:
+                load_next.hold_actors.append(actor)
+            if actor:
+                load_next.descriptions[actor] = entity['description']
 
     # Make the axes actor to the correct sizing based on the elements on screen
     cube_axis = vtk.vtkCubeAxesActor()
