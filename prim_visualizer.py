@@ -285,8 +285,8 @@ def load_next():
         colors_sphere.SetName("Colors");
 
         scale_factors_line = vtk.vtkFloatArray();
-        scale_factors_line.SetNumberOfComponents(3);
-        scale_factors_line.SetName("Scale Factors");
+        scale_factors_line.SetNumberOfComponents(1);
+        scale_factors_line.SetName("Tube Radii");
         colors_line = vtk.vtkFloatArray();
         colors_line.SetNumberOfComponents(4);
         colors_line.SetName("Colors");
@@ -309,7 +309,25 @@ def load_next():
                 #actor.GetProperty().SetColor(entity['color'])
                 #actor.GetProperty().SetOpacity(entity['opacity'])
             elif entity['type'] == 'vector':
-                pass
+                lines_points.InsertNextPoint(entity['position'][:3])
+                lines_points.InsertNextPoint(entity['position'][3:])
+                line = vtk.vtkLine()
+                line.GetPointIds().SetId(0, n)
+                line.GetPointIds().SetId(1, n+1)
+                n += 2
+                lines_cells.InsertNextCell(line)
+                if 'opacity' not in entity.keys():
+                    entity['opacity'] = 1.0
+                if 'color' not in entity.keys():
+                    entity['color'] = [1.0, 1.0, 1.0]
+                if 'radius' not in entity.keys():
+                    entity['radius'] = load_next.tube_radius
+                # This is not working as cell data, only point data,
+                # so needs inserted twice
+                for _ in range(2):
+                    colors_line.InsertNextTuple4(*entity['color'],
+                                                   entity['opacity'])
+                    scale_factors_line.InsertNextTuple1(entity['radius'])
                 #for( int i = 0; i < lines.rows(); i++)
                 #{
                 #    auto row = lines.row(i);
@@ -356,8 +374,6 @@ def load_next():
         sphere_pd.SetPoints(sphere_points)
         mapper = vtk.vtkGlyph3DMapper()
 
-        #sphere_pd.GetCellData().SetScalars(colors_sphere);
-        #sphere_pd.GetCellData().SetScalars(scale_factors_sphere);
         sphere_pd.GetPointData().AddArray(colors_sphere);
         sphere_pd.GetPointData().AddArray(scale_factors_sphere);
         mapper.SetInputData(sphere_pd)
@@ -369,8 +385,6 @@ def load_next():
 
         mapper.SetScaleModeToScaleByVectorComponents()
         mapper.SetScaleArray("Scale Factors")
-        #mapper.ScalarVisibilityOff()
-        #mapper.ScalingOff()
         mapper.Update()
 
         actor = vtk.vtkActor()
@@ -378,18 +392,39 @@ def load_next():
         load_next.ren.AddActor(actor)
         load_next.actors.append(actor)
 
-        #lines_pd.SetPoints(lines_points)
-        #lines_pd.SetLines(lines_cells)
-        #tube_filter = vtk.vtkTubeFilter()
-        #tube_filter.SetInputData(lines_pd);
-        #tube_filter.SetNumberOfSides(8)
-        #tube_filter.SetRadius(load_basic_scene.tube_radius)
-        #tube_filter.Update()
-        #mapper = vtk.vtkPolyDataMapper()
-        #mapper.SetInputConnection(tube_filter.GetOutputPort())
-        #actor = vtk.vtkActor()
-        #actor.SetMapper(mapper)
-        #load_basic_scene.ren.AddActor(actor)
+        lines_pd.SetPoints(lines_points)
+        lines_pd.SetLines(lines_cells)
+        lines_pd.GetPointData().AddArray(colors_line);
+        lines_pd.GetPointData().SetScalars(scale_factors_line);
+        lines_pd.GetPointData().SetActiveScalars("Tube Radii")
+        tube_filter = vtk.vtkTubeFilter()
+        tube_filter.SetInputData(lines_pd)
+        tube_filter.SetNumberOfSides(8)
+        tube_filter.SetVaryRadiusToVaryRadiusByAbsoluteScalar()
+        tube_filter.Update()
+        mapper = vtk.vtkPolyDataMapper()
+        mapper.SelectColorArray("Colors");
+        mapper.SetColorMode(2)
+        mapper.ScalarVisibilityOn()
+        mapper.SetScalarModeToUsePointFieldData()
+        mapper.SetInputConnection(tube_filter.GetOutputPort())
+        actor = vtk.vtkActor()
+        actor.SetMapper(mapper)
+        load_next.ren.AddActor(actor)
+
+    #linesPolyData->GetCellData()->SetScalars(colors);
+    #vtkNew<vtkTubeFilter> tubeFilter;
+    #tubeFilter->SetInputData(linesPolyData);
+    #tubeFilter->SetNumberOfSides(8);
+    #tubeFilter->SetRadius(radius);
+    #tubeFilter->Update();
+    #vtkNew<vtkPolyDataMapper> mapper;
+    #mapper->SetInputConnection(tubeFilter->GetOutputPort());
+    #mapper->SetColorMode(2);
+
+    #vtkNew<vtkActor> actor;
+    #actor->SetMapper(mapper);
+    #actor->GetProperty()->SetLineWidth(4);
     else:
         for entity in scene:
             actor = vtk.vtkActor()
@@ -437,8 +472,10 @@ def load_next():
     mins = [min(i) for i in load_next.positions]
     maxs = [max(i) for i in load_next.positions]
     dists = [i[0] - i[1] for i in zip(maxs, mins)]
-    mins = [i[0] - max(load_next.sphere_radius, i[1] * 0.1) for i in zip(mins, dists)]
-    maxs = [i[0] + max(load_next.sphere_radius, i[1] * 0.1) for i in zip(maxs, dists)]
+    mins = [i[0] - max(load_next.sphere_radius, i[1] * 0.1)
+            for i in zip(mins, dists)]
+    maxs = [i[0] + max(load_next.sphere_radius, i[1] * 0.1)
+            for i in zip(maxs, dists)]
     cube_axis.SetFlyModeToStaticEdges()
     cube_axis.SetBounds((mins[0], maxs[0], mins[1], maxs[1],
         mins[2], maxs[2]))
