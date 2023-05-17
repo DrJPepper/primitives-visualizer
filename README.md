@@ -151,7 +151,7 @@ Assuming you are not using [brew](https://brew.sh/):
 1. `cd primitives-visualizer`
 1. Download the following example file, either via `wget` or web browser and
    place it in the `primitives-visualizer` directory:
-   (https://www.cs.drexel.edu/~jcp353@drexel.edu/files/example\_vis.json)[https://www.cs.drexel.edu/~jcp353@drexel.edu/files/example\_vis.json)
+   (https://www.cs.drexel.edu/~jcp353@drexel.edu/files/example_vis.json)[https://www.cs.drexel.edu/~jcp353@drexel.edu/files/example_vis.json]
 1. Run `/usr/local/bin/python3 prim_visualizer.py -f example_vis.json`
 
 ## Example C++ code to generate the JSON
