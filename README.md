@@ -1,6 +1,6 @@
 # Primitives Visualizer
 
-![Screenshot 1](https://www.cs.drexel.edu/~jcp353/images/s1.png "Screenshot 1")
+![Screenshot 1](https://www.cs.drexel.edu/~jcp353@drexel.edu/images/s1.png "Screenshot 1")
 **TODO**: Add more screenshots/gifs
 
 This program visualizes basic 3D geometric primitives (currently, tubes and
@@ -133,6 +133,27 @@ Filename can also be specified in ./default_input.txt
 
 ## Dependencies
 Python (at least 3.4 I think), VTK, Qt5, PyQt5
+
+## Mac Install Instructions
+Assuming you are not using [brew](https://brew.sh/):
+1. Install the latest version of python from
+   [https://www.python.org/downloads/](https://www.python.org/downloads/)
+1. Install VTK from [https://vtk.org/download/](https://vtk.org/download/)
+1. Install Qt5 (**not** Qt6) from
+   [https://doc.qt.io/qt-5/macos.html](https://doc.qt.io/qt-5/macos.html)
+1. Open your terminal emulator
+1. Run `/usr/local/bin/pip3 install pyqt5`
+    1. Feel free to add `/usr/local/bin` to your PATH if it isn't there already
+1. Clone this repo via `git clone
+   https://github.com/DrJPepper/primitives-visualizer.git`
+    1. Your may be prompted to install CLI dev tools, be sure to do that if
+       asked
+1. `cd primitives-visualizer`
+1. Download the following example file, either via `wget` or web browser and
+   place it in the `primitives-visualizer` directory:
+   (https://www.cs.drexel.edu/~jcp353@drexel.edu/files/example_vis.json)
+   [https://www.cs.drexel.edu/~jcp353@drexel.edu/files/example_vis.json)
+1. Run `/usr/local/bin/python3 prim_visualizer.py -f example_vis.json`
 
 ## Example C++ code to generate the JSON
 **TODO**
