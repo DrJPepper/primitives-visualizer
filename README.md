@@ -1,5 +1,6 @@
 # Primitives Visualizer
 
+![Screenshot 2](https://www.cs.drexel.edu/~jcp353@drexel.edu/images/s2.png "Screenshot 2")
 ![Screenshot 1](https://www.cs.drexel.edu/~jcp353@drexel.edu/images/s1.png "Screenshot 1")
 **TODO**: Add more screenshots/gifs
 
