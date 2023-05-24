@@ -4,7 +4,8 @@ import argparse
 from pathlib import Path
 from copy import deepcopy
 
-from PyQt5.QtWidgets import QApplication, QLabel, QMainWindow, QPushButton
+from PyQt5.QtWidgets import QApplication, QLabel, QMainWindow, QPushButton,\
+                            QSizePolicy
 from PyQt5.QtCore import QFile, QIODevice
 from PyQt5.uic import loadUi
 from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
@@ -55,8 +56,10 @@ class MainWindow(QMainWindow):
 
         # Add the render window to the frame from the .ui file,
         # then make it fill the whole frame
-        self.vtkWidget = QVTKRenderWindowInteractor(self.qvtkFrame)
-        self.vtkWidget.setFixedSize(self.qvtkFrame.size())
+        self.vtkWidget = QVTKRenderWindowInteractor()
+        self.horizontalLayout_2.addWidget(self.vtkWidget)
+        self.vtkWidget.setSizePolicy(QSizePolicy.Expanding,
+                QSizePolicy.Expanding)
 
         self.ren = vtk.vtkRenderer()
         self.vtkWidget.GetRenderWindow().AddRenderer(self.ren)
@@ -125,6 +128,13 @@ def export_scene():
 def reset_camera():
     reset_camera.ren.ResetCamera()
     reset_camera.renWin.Render()
+
+def json_get(json_obj, *args):
+    for arg in args:
+        try:
+            return json_obj[arg]
+        except:
+            pass
 
 """
 Prints information on the selected entity to an info box in the GUI
@@ -246,7 +256,7 @@ def load_next():
 
     curr = load_next.json_doc['list'][load_next.i]
     # List of entities to process
-    scene = curr['entities']
+    scene = json_get(curr, 'entities', 'e')
     # Whether this scene should be persistent through resets
     hold = 'hold' in curr.keys() and curr['hold']
     if 'reset' in curr:
@@ -267,20 +277,19 @@ def load_next():
     for entity in scene:
         # Determine how large to make the axes
         #try:
-        for i in range(len(entity['position'])):
-            if type(entity['position'][i]) is float:
-                load_next.positions[i % 3].append(entity['position'][i])
+        pos = json_get(entity, 'p', 'position')
+        for i in range(len(pos)):
+            if type(pos[i]) is float:
+                load_next.positions[i % 3].append(pos[i])
             else:
-                for j in range(len(entity['position'][i])):
-                    load_next.positions[j].append(entity['position'][i][j])
+                for j in range(len(pos[i])):
+                    load_next.positions[j].append(pos[i][j])
             if hold:
-                if type(entity['position']) is int:
-                    load_next.positions[i % 3].append(
-                            entity['position'][i])
+                if type(pos) is int:
+                    load_next.positions[i % 3].append(pos[i])
                 else:
-                    for j in range(len(entity['position'][i])):
-                        load_next.positions[j].append(
-                                entity['position'][i][j])
+                    for j in range(len(pos[i])):
+                        load_next.positions[j].append(pos[i][j])
         #except:
         #    print(entity)
         #    exit(1)
@@ -311,51 +320,52 @@ def load_next():
 
         n = 0
         for entity in scene:
-            if 'opacity' not in entity.keys():
-                entity['opacity'] = 1.0
-            if 'color' not in entity.keys():
-                entity['color'] = [1.0, 1.0, 1.0]
-            if entity['type'] == 'point':
+            if 'opacity' not in entity.keys() and 'o' not in entity.keys():
+                entity['o'] = 1.0
+            if 'color' not in entity.keys() and 'c' not in entity.keys():
+                entity['c'] = [1.0, 1.0, 1.0]
+            json_type = json_get(entity, 't', 'type')
+            if json_type == 'point' or json_type == 'p':
                 #source.SetCenter(entity['position'])
-                sphere_points.InsertNextPoint(entity['position'])
-                colors_sphere.InsertNextTuple4(*entity['color'],
-                                               entity['opacity'])
-                if 'radius' not in entity.keys():
-                    entity['radius'] = load_next.sphere_radius
+                sphere_points.InsertNextPoint(json_get(entity, 'p', 'position'))
+                colors_sphere.InsertNextTuple4(*json_get(entity, 'c', 'color'),
+                                               json_get(entity, 'o', 'opacity'))
+                if 'radius' not in entity.keys() and 'r' not in entity.keys():
+                    entity['r'] = load_next.sphere_radius
                 scale_factors_sphere.InsertNextTuple3(
-                        *[entity['radius'] * 2 for _ in range(3)])
+                        *[json_get(entity, 'r', 'radius') * 2 for _ in range(3)])
                 #actor.GetProperty().SetColor(entity['color'])
                 #actor.GetProperty().SetOpacity(entity['opacity'])
-            elif entity['type'] == 'vector':
-                lines_points.InsertNextPoint(entity['position'][:3])
-                lines_points.InsertNextPoint(entity['position'][3:])
+            elif json_type == 'vector' or json_type == 'v':
+                lines_points.InsertNextPoint(json_get(entity, 'p', 'position')[:3])
+                lines_points.InsertNextPoint(json_get(entity, 'p', 'position')[3:])
                 line = vtk.vtkLine()
                 line.GetPointIds().SetId(0, n)
                 line.GetPointIds().SetId(1, n+1)
                 n += 2
                 lines_cells.InsertNextCell(line)
-                if 'radius' not in entity.keys():
-                    entity['radius'] = load_next.tube_radius
+                if 'radius' not in entity.keys() and 'r' not in entity.keys():
+                    entity['r'] = load_next.tube_radius
                 # This is not working as cell data, only point data,
                 # so needs inserted twice
                 for _ in range(2):
-                    colors_line.InsertNextTuple4(*entity['color'],
-                                                   entity['opacity'])
-                    scale_factors_line.InsertNextTuple1(entity['radius'])
-            elif entity['type'] == 'polyline':
+                    colors_line.InsertNextTuple4(*json_get(entity, 'c', 'color'),
+                                                  json_get(entity, 'o', 'opacity'))
+                    scale_factors_line.InsertNextTuple1(json_get(entity, 'r', 'radius'))
+            elif json_type == 'polyline' or json_type == 'y':
                 line = vtk.vtkPolyLine()
-                id_count = len(entity['position'])
+                id_count = len(json_get(entity, 'p', 'position'))
                 line.GetPointIds().SetNumberOfIds(id_count)
-                if 'radius' not in entity.keys():
-                    entity['radius'] = load_next.tube_radius
+                if 'radius' not in entity.keys() and 'r' not in entity.keys():
+                    entity['r'] = load_next.tube_radius
                 for i in range(id_count):
-                    pt = entity['position'][i]
+                    pt = json_get(entity, 'p', 'position')[i]
                     lines_points.InsertNextPoint(pt)
                     line.GetPointIds().SetId(i, n)
                     n += 1
-                    colors_line.InsertNextTuple4(*entity['color'],
-                                                   entity['opacity'])
-                    scale_factors_line.InsertNextTuple1(entity['radius'])
+                    colors_line.InsertNextTuple4(*json_get(entity, 'c', 'color'),
+                                                  json_get(entity, 'o', 'opacity'))
+                    scale_factors_line.InsertNextTuple1(json_get(entity, 'r', 'radius'))
                 lines_cells.InsertNextCell(line)
 
         sphere_pd.SetPoints(sphere_points)
@@ -417,42 +427,43 @@ def load_next():
         for entity in scene:
             actor = vtk.vtkActor()
             mapper = vtk.vtkPolyDataMapper()
-            if 'opacity' not in entity.keys():
-                entity['opacity'] = 1.0
-            if 'color' not in entity.keys():
-                entity['color'] = [1.0, 1.0, 1.0]
-            if 'description' not in entity.keys():
-                entity['description'] = "No entity description provided"
-            if entity['type'] == 'point':
-                if 'radius' not in entity.keys():
-                    entity['radius'] = load_next.sphere_radius
+            if 'opacity' not in entity.keys() and 'o' not in entity.keys():
+                entity['o'] = 1.0
+            if 'color' not in entity.keys() and 'c' not in entity.keys():
+                entity['c'] = [1.0, 1.0, 1.0]
+            if 'description' not in entity.keys() and 'd' not in entity.keys():
+                entity['d'] = "No entity description provided"
+            json_type = json_get(entity, 't', 'type')
+            if entity['type'] == 'point' or entity['type'] == 'p':
+                if 'radius' not in entity.keys() and 'r' not in entity.keys():
+                    entity['r'] = load_next.sphere_radius
                 source = vtk.vtkSphereSource()
-                source.SetRadius(entity['radius'])
-                source.SetCenter(entity['position'])
+                source.SetRadius(json_get(entity, 'r', 'radius'))
+                source.SetCenter(json_get(entity, 'p', 'position'))
                 mapper.SetInputConnection(source.GetOutputPort())
-            elif entity['type'] == 'vector':
-                if 'radius' not in entity.keys():
-                    entity['radius'] = load_next.tube_radius
+            elif entity['type'] == 'vector' or entity['type'] == 'v':
+                if 'radius' not in entity.keys() and 'r' not in entity.keys():
+                    entity['r'] = load_next.tube_radius
                 line_source = vtk.vtkLineSource()
-                line_source.SetPoint1(entity['position'][:3])
-                line_source.SetPoint2(entity['position'][3:])
+                line_source.SetPoint1(json_get(entity, 'p', 'position')[:3])
+                line_source.SetPoint2(json_get(entity, 'p', 'position')[3:])
                 line_source.SetResolution(6)
                 line_source.Update()
                 tube_filter = vtk.vtkTubeFilter()
                 tube_filter.SetInputConnection(line_source.GetOutputPort())
                 tube_filter.SetNumberOfSides(8)
-                tube_filter.SetRadius(entity['radius'])
+                tube_filter.SetRadius(json_get(entity, 'r', 'radius'))
                 tube_filter.Update()
                 mapper.SetInputConnection(tube_filter.GetOutputPort())
             actor.SetMapper(mapper)
-            actor.GetProperty().SetColor(entity['color'])
-            actor.GetProperty().SetOpacity(entity['opacity'])
+            actor.GetProperty().SetColor(json_get(entity, 'c', 'color'))
+            actor.GetProperty().SetOpacity(json_get(entity, 'o', 'opacity'))
             load_next.ren.AddActor(actor)
             load_next.actors.append(actor)
             if hold:
                 load_next.hold_actors.append(actor)
             if actor:
-                load_next.descriptions[actor] = entity['description']
+                load_next.descriptions[actor] = json_get(entity, 'd', 'description')
 
     # Make the axes actor to the correct sizing based on the elements on screen
     cube_axis = vtk.vtkCubeAxesActor()
