@@ -434,14 +434,14 @@ def load_next():
             if 'description' not in entity.keys() and 'd' not in entity.keys():
                 entity['d'] = "No entity description provided"
             json_type = json_get(entity, 't', 'type')
-            if entity['type'] == 'point' or entity['type'] == 'p':
+            if json_type == 'point' or json_type == 'p':
                 if 'radius' not in entity.keys() and 'r' not in entity.keys():
                     entity['r'] = load_next.sphere_radius
                 source = vtk.vtkSphereSource()
                 source.SetRadius(json_get(entity, 'r', 'radius'))
                 source.SetCenter(json_get(entity, 'p', 'position'))
                 mapper.SetInputConnection(source.GetOutputPort())
-            elif entity['type'] == 'vector' or entity['type'] == 'v':
+            elif json_type == 'vector' or json_type == 'v':
                 if 'radius' not in entity.keys() and 'r' not in entity.keys():
                     entity['r'] = load_next.tube_radius
                 line_source = vtk.vtkLineSource()
