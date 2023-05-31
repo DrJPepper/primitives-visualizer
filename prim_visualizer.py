@@ -148,7 +148,10 @@ def callback_function(caller, ev):
         pos = picker.GetPickPosition()
         string = f'3D Scene Position: {pos[0]:.2f}, {pos[1]:.2f}, {pos[2]:.2f}\n\n'
         if not callback_function.basic:
-            string += str(load_next.descriptions[picked_actor])
+            try:
+                string += str(load_next.descriptions[picked_actor])
+            except KeyError:
+                string += "No entity description provided"
         callback_function.info_box.setPlainText(string)
     else:
         callback_function.info_box.setPlainText(
