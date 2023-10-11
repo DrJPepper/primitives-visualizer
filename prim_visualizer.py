@@ -1,4 +1,5 @@
 import sys
+import os
 import json
 import argparse
 from pathlib import Path
@@ -52,7 +53,8 @@ class MainWindow(QMainWindow):
             sphere_radius = args.sphere_radius
 
         # Load the .ui file and associate its content with this MainWindow
-        loadUi("window.ui", self)
+        pyfile_path = os.path.dirname(os.path.realpath(__file__))
+        loadUi(os.path.join(pyfile_path, 'window.ui'), self)
 
         # Add the render window to the frame from the .ui file,
         # then make it fill the whole frame
