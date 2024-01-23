@@ -164,8 +164,6 @@ def model_callback(caller, ev):
         pos = np.array(picker.GetPickPosition())
         bestDist = float('inf')
         bestInd = -1
-        print(model_callback.vert_mat.shape)
-        exit(0)
         for i in range(model_callback.vert_mat.shape[0]):
             dist = np.linalg.norm(pos - model_callback.vert_mat[i])
             if dist < bestDist:
@@ -219,18 +217,18 @@ def load_model():
     mesh_in = model_actor.GetMapper().GetInput()
 
     # Points
-    #vertices = mesh_in.GetPoints().GetData()
-    #num_vertices = mesh_in.GetPoints().GetNumberOfPoints()
     f = open(load_model.filename)
     lines = f.readlines()
     vertices = []
+    faces = []
     for line in lines:
         if len(line) and line[0:2] == 'v ':
             vertices.append([float(i) for i in line.strip().split()[1:4]])
         if len(line) and line[0:2] == 'f ':
+            faces.append([int(i) for i in np.array(line.replace('//',
+                         ' ').split())[[1, 3, 5]]])
     num_vertices = len(vertices)
     vert_mat = np.array(vertices)
-    #vert_mat = np.zeros((num_vertices, 3))
     points = vtk.vtkPoints()
     positions = [[], [], []]
     for i in range(0, num_vertices):
@@ -238,20 +236,18 @@ def load_model():
         y = vert_mat[i, 1]
         z = vert_mat[i, 2]
         points.InsertNextPoint(x, y, z)
-        print([x, y, z])
         positions[0].append(x)
         positions[1].append(y)
         positions[2].append(z)
     # Lines
-    #num_faces = mesh_in.GetNumberOfCells()
+    num_faces = len(faces)
     lines = vtk.vtkCellArray()
     for i in range(0, num_faces):
-        face = vtk.vtkIdList()
-        mesh_in.GetCellPoints(i, face)
+        face = faces[i]
         for j in range(0, 3):
             line = vtk.vtkLine()
-            line.GetPointIds().SetId(0, face.GetId(j))
-            line.GetPointIds().SetId(1, face.GetId((j+1)%3))
+            line.GetPointIds().SetId(0, face[j]-1)
+            line.GetPointIds().SetId(1, face[(j+1)%3]-1)
             lines.InsertNextCell(line)
 
     load_model.ren.RemoveActor(all_actors.GetLastActor())
