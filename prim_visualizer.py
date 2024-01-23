@@ -164,6 +164,8 @@ def model_callback(caller, ev):
         pos = np.array(picker.GetPickPosition())
         bestDist = float('inf')
         bestInd = -1
+        print(model_callback.vert_mat.shape)
+        exit(0)
         for i in range(model_callback.vert_mat.shape[0]):
             dist = np.linalg.norm(pos - model_callback.vert_mat[i])
             if dist < bestDist:
@@ -217,21 +219,28 @@ def load_model():
     mesh_in = model_actor.GetMapper().GetInput()
 
     # Points
-    vertices = mesh_in.GetPoints().GetData()
-    num_vertices = mesh_in.GetPoints().GetNumberOfPoints()
-    vert_mat = np.zeros((num_vertices, 3))
+    #vertices = mesh_in.GetPoints().GetData()
+    #num_vertices = mesh_in.GetPoints().GetNumberOfPoints()
+    f = open(load_model.filename)
+    lines = f.readlines()
+    vertices = []
+    for line in lines:
+        if len(line) and line[0:2] == 'v ':
+            vertices.append([float(i) for i in line.strip().split()[1:4]])
+    num_vertices = len(vertices)
+    vert_mat = np.array(vertices)
+    #vert_mat = np.zeros((num_vertices, 3))
     points = vtk.vtkPoints()
     positions = [[], [], []]
     for i in range(0, num_vertices):
-        x = vertices.GetComponent(i, 0)
-        y = vertices.GetComponent(i, 1)
-        z = vertices.GetComponent(i, 2)
+        x = vert_mat[i, 0]
+        y = vert_mat[i, 1]
+        z = vert_mat[i, 2]
         points.InsertNextPoint(x, y, z)
-        vert_mat[i] = [x, y, z]
+        print([x, y, z])
         positions[0].append(x)
         positions[1].append(y)
         positions[2].append(z)
-
     # Lines
     num_faces = mesh_in.GetNumberOfCells()
     lines = vtk.vtkCellArray()
