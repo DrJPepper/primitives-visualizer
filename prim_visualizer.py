@@ -11,6 +11,7 @@ from PyQt5.QtCore import QFile, QIODevice
 from PyQt5.uic import loadUi
 from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 import vtk
+import numpy as np
 
 TUBE_RADIUS_DEFAULT = 0.05
 SPHERE_RADIUS_DEFAULT = 0.1
@@ -26,6 +27,8 @@ class MainWindow(QMainWindow):
                 description = 'Visualizes 3D geometry from a JSON file',
                 epilog = 'Filename can also be specified in ./default_input.txt'
                 )
+        parser.add_argument('-m', '--model-mode', required=False,
+                            action=argparse.BooleanOptionalAction)
         parser.add_argument('-b', '--basic-mode', required=False,
                             action=argparse.BooleanOptionalAction)
         parser.add_argument('-n', '--no-reset', required=False,
@@ -92,11 +95,13 @@ class MainWindow(QMainWindow):
         callback_function.basic = args.basic_mode
         json_doc = None
         # Set up callback
-        if not args.basic_mode:
+        if not args.basic_mode and not args.model_mode:
             json_doc = json.load(open(filename))
             if "glyph" not in json_doc.keys() or not json_doc["glyph"]:
                 self.iren.AddObserver(
                         'LeftButtonPressEvent', callback_function)
+        elif args.model_mode:
+            self.iren.AddObserver('LeftButtonPressEvent', model_callback)
         if args.basic_mode:
             load_basic_scene.ren = self.ren
             load_basic_scene.filename = filename
@@ -104,6 +109,15 @@ class MainWindow(QMainWindow):
             load_basic_scene.sphere_radius = sphere_radius
             load_basic_scene.done = False
             load_basic_scene()
+        elif args.model_mode:
+            load_model.ren = self.ren
+            load_model.descriptions = {}
+            load_model.tube_radius = tube_radius
+            load_model.sphere_radius = sphere_radius
+            load_model.filename = filename
+            load_model.ren_win = self.vtkWidget.GetRenderWindow()
+            load_model.done = False
+            load_model()
         else:
             self.runallButton.clicked.connect(run_all)
             self.continueButton.clicked.connect(load_next)
@@ -139,6 +153,25 @@ def json_get(json_obj, *args):
             pass
 
 """
+Prints which vertex was clicked on when in model mode
+"""
+def model_callback(caller, ev):
+    picker = vtk.vtkPropPicker()
+    pos = caller.GetEventPosition()
+    picker.PickProp(pos[0], pos[1], callback_function.ren)
+    picked_actor = picker.GetActor()
+    if picked_actor == model_callback.center_actor:
+        pos = np.array(picker.GetPickPosition())
+        bestDist = float('inf')
+        bestInd = -1
+        for i in range(model_callback.vert_mat.shape[0]):
+            dist = np.linalg.norm(pos - model_callback.vert_mat[i])
+            if dist < bestDist:
+                bestDist = dist
+                bestInd = i
+        callback_function.info_box.setPlainText(f'Picked Vertex: {bestInd}')
+
+"""
 Prints information on the selected entity to an info box in the GUI
 """
 def callback_function(caller, ev):
@@ -166,6 +199,104 @@ Runs through all entities in the list (not an instantaneous process)
 def run_all():
     while load_next.i < len(load_next.json_doc['list']):
         load_next()
+
+"""
+Loads model
+"""
+def load_model():
+    if load_model.done:
+        print("No more scenes to render")
+        return
+    importer = vtk.vtkOBJImporter()
+    importer.SetFileName(load_model.filename)
+    importer.SetRenderWindow(load_model.ren_win)
+    importer.Update()
+
+    all_actors = importer.GetRenderer().GetActors();
+    model_actor = all_actors.GetLastActor();
+    mesh_in = model_actor.GetMapper().GetInput()
+
+    # Points
+    vertices = mesh_in.GetPoints().GetData()
+    num_vertices = mesh_in.GetPoints().GetNumberOfPoints()
+    vert_mat = np.zeros((num_vertices, 3))
+    points = vtk.vtkPoints()
+    positions = [[], [], []]
+    for i in range(0, num_vertices):
+        x = vertices.GetComponent(i, 0)
+        y = vertices.GetComponent(i, 1)
+        z = vertices.GetComponent(i, 2)
+        points.InsertNextPoint(x, y, z)
+        vert_mat[i] = [x, y, z]
+        positions[0].append(x)
+        positions[1].append(y)
+        positions[2].append(z)
+
+    # Lines
+    num_faces = mesh_in.GetNumberOfCells()
+    lines = vtk.vtkCellArray()
+    for i in range(0, num_faces):
+        face = vtk.vtkIdList()
+        mesh_in.GetCellPoints(i, face)
+        for j in range(0, 3):
+            line = vtk.vtkLine()
+            line.GetPointIds().SetId(0, face.GetId(j))
+            line.GetPointIds().SetId(1, face.GetId((j+1)%3))
+            lines.InsertNextCell(line)
+
+    load_model.ren.RemoveActor(all_actors.GetLastActor())
+    sphere_source = vtk.vtkSphereSource()
+    sphere_source.SetRadius(load_model.sphere_radius)
+    sphere_pd = vtk.vtkPolyData()
+    sphere_points = points
+
+    lines_pd = vtk.vtkPolyData()
+    lines_points = points
+    lines_cells = lines
+
+    sphere_pd.SetPoints(sphere_points)
+    mapper = vtk.vtkGlyph3DMapper()
+    mapper.SetInputData(sphere_pd)
+    mapper.SetSourceConnection(sphere_source.GetOutputPort())
+    mapper.ScalarVisibilityOff()
+    mapper.ScalingOff()
+
+    actor = vtk.vtkActor()
+    actor.SetMapper(mapper)
+    load_model.ren.AddActor(actor)
+
+    model_callback.center_actor = actor
+    model_callback.vert_mat = vert_mat
+
+    lines_pd.SetPoints(lines_points)
+    lines_pd.SetLines(lines_cells)
+    tube_filter = vtk.vtkTubeFilter()
+    tube_filter.SetInputData(lines_pd);
+    tube_filter.SetNumberOfSides(8)
+    tube_filter.SetRadius(load_model.tube_radius)
+    tube_filter.Update()
+    mapper = vtk.vtkPolyDataMapper()
+    mapper.SetInputConnection(tube_filter.GetOutputPort())
+    actor2 = vtk.vtkActor()
+    actor2.SetMapper(mapper)
+    load_model.ren.AddActor(actor2)
+
+    # Make the axes actor to the correct sizing based on the elements on screen
+    cube_axis = vtk.vtkCubeAxesActor()
+    cube_axis.SetCamera(load_model.ren.GetActiveCamera());
+    mins = [min(i) for i in positions]
+    maxs = [max(i) for i in positions]
+    dists = [i[0] - i[1] for i in zip(maxs, mins)]
+    mins = [i[0] - max(load_model.sphere_radius, i[1] * 0.1)
+            for i in zip(mins, dists)]
+    maxs = [i[0] + max(load_model.sphere_radius, i[1] * 0.1)
+            for i in zip(maxs, dists)]
+    cube_axis.SetFlyModeToStaticEdges()
+    cube_axis.SetBounds((mins[0], maxs[0], mins[1], maxs[1],
+        mins[2], maxs[2]))
+    load_model.ren.AddActor(cube_axis)
+
+    reset_camera()
 
 """
 Loads basic mode scene
