@@ -227,6 +227,7 @@ def load_model():
     for line in lines:
         if len(line) and line[0:2] == 'v ':
             vertices.append([float(i) for i in line.strip().split()[1:4]])
+        if len(line) and line[0:2] == 'f ':
     num_vertices = len(vertices)
     vert_mat = np.array(vertices)
     #vert_mat = np.zeros((num_vertices, 3))
@@ -242,7 +243,7 @@ def load_model():
         positions[1].append(y)
         positions[2].append(z)
     # Lines
-    num_faces = mesh_in.GetNumberOfCells()
+    #num_faces = mesh_in.GetNumberOfCells()
     lines = vtk.vtkCellArray()
     for i in range(0, num_faces):
         face = vtk.vtkIdList()
