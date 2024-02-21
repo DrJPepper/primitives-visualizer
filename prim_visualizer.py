@@ -169,7 +169,7 @@ def model_callback(caller, ev):
             if dist < bestDist:
                 bestDist = dist
                 bestInd = i
-        callback_function.info_box.setPlainText(f'Picked Vertex: {bestInd}')
+        callback_function.info_box.setPlainText(f'Picked Vertex: {bestInd}\n{pos}')
 
 """
 Prints information on the selected entity to an info box in the GUI
