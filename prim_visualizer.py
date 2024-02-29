@@ -333,6 +333,8 @@ def load_basic_scene():
         if len(entity) == 6:
             for i in range(3):
                 positions[i].append(entity[i+3])
+        elif len(entity) == 2:
+            entity.append(0)
         for i in range(3):
             positions[i].append(entity[i])
         actor = None
