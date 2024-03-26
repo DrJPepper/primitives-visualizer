@@ -117,6 +117,7 @@ class MainWindow(QMainWindow):
             load_model.filename = filename
             load_model.ren_win = self.vtkWidget.GetRenderWindow()
             load_model.done = False
+            load_model.info_box = self.infoBox
             load_model()
         else:
             self.runallButton.clicked.connect(run_all)
@@ -297,6 +298,9 @@ def load_model():
             for i in zip(mins, dists)]
     maxs = [i[0] + max(load_model.sphere_radius, i[1] * 0.1)
             for i in zip(maxs, dists)]
+    bbox = [maxs[i] - mins[i] for i in range(3)]
+    load_model.info_box.setPlainText(
+            f'Bounding Box Size: {bbox[0]}, {bbox[1]}, {bbox[2]}')
     cube_axis.SetFlyModeToStaticEdges()
     cube_axis.SetBounds((mins[0], maxs[0], mins[1], maxs[1],
         mins[2], maxs[2]))
@@ -384,7 +388,7 @@ def load_basic_scene():
     cube_axis.SetFlyModeToStaticEdges()
     cube_axis.SetBounds((mins[0], maxs[0], mins[1], maxs[1],
         mins[2], maxs[2]))
-    load_basic_scene.ren.AddActor(cube_axis)
+    #load_basic_scene.ren.AddActor(cube_axis)
 
     reset_camera()
 
