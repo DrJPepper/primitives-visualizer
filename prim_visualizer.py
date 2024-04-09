@@ -1,4 +1,6 @@
 import sys
+import calendar
+import time
 import os
 import json
 import argparse
@@ -93,6 +95,8 @@ class MainWindow(QMainWindow):
         export_scene.exporter = self.exporter
         self.exportButton.clicked.connect(export_scene)
 
+        export_png.renWin = self.vtkWidget.GetRenderWindow()
+        self.pngButton.clicked.connect(export_png)
 
         reset_camera()
         self.show()
@@ -154,6 +158,19 @@ class MainWindow(QMainWindow):
 
 def export_scene():
     export_scene.exporter.Update()
+
+def export_png():
+    writer = vtk.vtkPNGWriter()
+    window_to_image_filter = vtk.vtkWindowToImageFilter()
+    window_to_image_filter.SetInput(export_png.renWin)
+    window_to_image_filter.SetScale(1) # image quality
+    window_to_image_filter.SetInputBufferTypeToRGB()
+    window_to_image_filter.ReadFrontBufferOff()
+    window_to_image_filter.Update()
+
+    writer.SetFileName(f"scene_{calendar.timegm(time.gmtime())}.png")
+    writer.SetInputConnection(window_to_image_filter.GetOutputPort())
+    writer.Write()
 
 def reset_camera():
     reset_camera.ren.ResetCamera()

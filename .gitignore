@@ -134,3 +134,4 @@ dmypy.json
 *.mtl
 *.stl
 reduce_faces.py
+*.png
