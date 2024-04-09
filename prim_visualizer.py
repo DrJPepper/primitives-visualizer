@@ -27,7 +27,11 @@ class MainWindow(QMainWindow):
                 description = 'Visualizes 3D geometry from a JSON file',
                 epilog = 'Filename can also be specified in ./default_input.txt'
                 )
+        parser.add_argument('-l', '--light-mode', required=False,
+                            action=argparse.BooleanOptionalAction)
         parser.add_argument('-m', '--model-mode', required=False,
+                            action=argparse.BooleanOptionalAction)
+        parser.add_argument('-o', '--obj-mode', required=False,
                             action=argparse.BooleanOptionalAction)
         parser.add_argument('-b', '--basic-mode', required=False,
                             action=argparse.BooleanOptionalAction)
@@ -78,6 +82,9 @@ class MainWindow(QMainWindow):
 
         colors = vtk.vtkNamedColors()
 
+        if args.light_mode:
+            self.ren.SetBackground(colors.GetColor3d("white"));
+
         # Buttons
         reset_camera.ren = self.ren
         reset_camera.renWin = self.vtkWidget.GetRenderWindow()
@@ -95,7 +102,7 @@ class MainWindow(QMainWindow):
         callback_function.basic = args.basic_mode
         json_doc = None
         # Set up callback
-        if not args.basic_mode and not args.model_mode:
+        if not (args.basic_mode or args.model_mode or args.obj_mode):
             json_doc = json.load(open(filename))
             if "glyph" not in json_doc.keys() or not json_doc["glyph"]:
                 self.iren.AddObserver(
@@ -109,6 +116,12 @@ class MainWindow(QMainWindow):
             load_basic_scene.sphere_radius = sphere_radius
             load_basic_scene.done = False
             load_basic_scene()
+        elif args.obj_mode:
+            load_obj.ren = self.ren
+            load_obj.light_mode = args.light_mode
+            load_obj.filename = filename
+            load_obj.ren_win = self.vtkWidget.GetRenderWindow()
+            load_obj()
         elif args.model_mode:
             load_model.ren = self.ren
             load_model.descriptions = {}
@@ -200,6 +213,22 @@ Runs through all entities in the list (not an instantaneous process)
 def run_all():
     while load_next.i < len(load_next.json_doc['list']):
         load_next()
+
+"""
+Loads obj file and visualizes it
+"""
+def load_obj():
+    colors = vtk.vtkNamedColors()
+    importer = vtk.vtkOBJImporter()
+    importer.SetFileName(load_obj.filename)
+    importer.SetRenderWindow(load_obj.ren_win)
+    importer.Update()
+    actor = load_obj.ren.GetActors().GetLastActor()
+    if load_obj.light_mode:
+        a = 0.27
+        actor.GetProperty().SetColor(a, a, a)
+    actor.GetProperty().EdgeVisibilityOn()
+    reset_camera()
 
 """
 Loads model
