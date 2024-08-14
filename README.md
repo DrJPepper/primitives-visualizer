@@ -1,8 +1,8 @@
 # Primitives Visualizer
 
 <p float="left">
-  <img src="https://www.cs.drexel.edu/~jcp353@drexel.edu/images/s2.png" width="49%" />
-  <img src="https://www.cs.drexel.edu/~jcp353@drexel.edu/images/s1.png" width="44%" /> 
+  <img src="https://www.cs.drexel.edu/~jcp353/images/s2.png" width="49%" />
+  <img src="https://www.cs.drexel.edu/~jcp353/images/s1.png" width="44%" /> 
 </p>
 
 <!--![Screenshot 2](https://www.cs.drexel.edu/~jcp353@drexel.edu/images/s2.png "Screenshot 2")

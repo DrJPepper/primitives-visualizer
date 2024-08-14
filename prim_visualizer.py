@@ -37,6 +37,8 @@ class MainWindow(QMainWindow):
                             action=argparse.BooleanOptionalAction)
         parser.add_argument('-b', '--basic-mode', required=False,
                             action=argparse.BooleanOptionalAction)
+        parser.add_argument('-r', '--render-mode', required=False,
+                            action=argparse.BooleanOptionalAction)
         parser.add_argument('-n', '--no-reset', required=False,
                             action=argparse.BooleanOptionalAction)
         parser.add_argument('-f', '--filename', required=False)
@@ -107,7 +109,26 @@ class MainWindow(QMainWindow):
         json_doc = None
         # Set up callback
         if not (args.basic_mode or args.model_mode or args.obj_mode):
-            json_doc = json.load(open(filename))
+            if args.render_mode:
+                batch_json = json.load(open(filename))
+                json_doc = {}
+                json_doc["list"] = []
+                json_doc["glyph"] = True
+                for step in batch_json["positions"]:
+                    entry = {}
+                    entry["entities"] = []
+                    bpts = step["positions"]
+                    points = []
+                    for i in range(0, len(bpts), 3):
+                        points.append([bpts[i], bpts[i+1], bpts[i+2]])
+                    for edge in batch_json["edges"]:
+                        entry["entities"].append(
+                                {"type": "vector",
+                                 "position": points[edge["vertices"][0]] +
+                                 points[edge["vertices"][1]]})
+                    json_doc["list"].append(entry)
+            else:
+                json_doc = json.load(open(filename))
             if "glyph" not in json_doc.keys() or not json_doc["glyph"]:
                 self.iren.AddObserver(
                         'LeftButtonPressEvent', callback_function)
