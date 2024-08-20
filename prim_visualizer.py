@@ -138,6 +138,7 @@ class MainWindow(QMainWindow):
                                  "color": c,
                                  "radius": tr})
                     json_doc["list"].append(entry)
+                    break
             else:
                 json_doc = json.load(open(filename))
             if "glyph" not in json_doc.keys() or not json_doc["glyph"]:
@@ -186,6 +187,7 @@ class MainWindow(QMainWindow):
             load_next.descriptions = {}
             load_next.tube_radius = tube_radius
             load_next.sphere_radius = sphere_radius
+            load_next.vtkWidget = self.vtkWidget
             load_next()
 
 def dist(p1, p2):
@@ -743,6 +745,28 @@ def load_next():
     if (load_next.i == 1 or load_next.reset):
         reset_camera()
     reset_camera.renWin.Render()
+
+    from pycimg import CImg
+    yellow = np.array([255.0, 255.0, 0.0]).astype(np.float32)
+
+    writer = vtk.vtkPNGWriter()
+
+    window_to_image_filter = vtk.vtkWindowToImageFilter()
+    window_to_image_filter.SetInput(load_next.vtkWidget.GetRenderWindow());
+    window_to_image_filter.SetScale(1);
+    window_to_image_filter.SetInputBufferTypeToRGB();
+    window_to_image_filter.ReadFrontBufferOff();
+    window_to_image_filter.Update();
+
+    writer.SetFileName('test.png');
+    writer.SetInputConnection(window_to_image_filter.GetOutputPort());
+    writer.Write();
+
+    img = CImg('test.png')
+    img.draw_text(x0=10, y0=img.height - 40, text=f"kA90: {1.0:.2}, kA120: {1.0:.2}, kLinear: {1.0:.2}, Epochs: {0}",
+            foreground_color=yellow, background_color=np.array([0.0,0.0,0.0]).astype(np.float32), opacity=1.0, font_height=32);
+    img.save_png('test2.png');
+    exit(0)
 
 def main():
     app = QApplication(sys.argv)
