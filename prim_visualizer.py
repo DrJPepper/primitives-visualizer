@@ -114,6 +114,8 @@ class MainWindow(QMainWindow):
                 json_doc = {}
                 json_doc["list"] = []
                 json_doc["glyph"] = True
+                sr = batch_json["scale_factor"] * 0.05
+                tr = batch_json["scale_factor"] * 0.025
                 for step in batch_json["positions"]:
                     entry = {}
                     entry["entities"] = []
@@ -121,11 +123,20 @@ class MainWindow(QMainWindow):
                     points = []
                     for i in range(0, len(bpts), 3):
                         points.append([bpts[i], bpts[i+1], bpts[i+2]])
+                        entry["entities"].append(
+                                {"type": "point",
+                                 "position": points[-1],
+                                 "color": [1.0, 1.0, 1.0],
+                                 "radius": sr})
                     for edge in batch_json["edges"]:
+                        l = dist(points[edge["vertices"][0]], points[edge["vertices"][1]])
+                        c = ratio_to_rgb(l / edge["rest_length"])
                         entry["entities"].append(
                                 {"type": "vector",
                                  "position": points[edge["vertices"][0]] +
-                                 points[edge["vertices"][1]]})
+                                 points[edge["vertices"][1]],
+                                 "color": c,
+                                 "radius": tr})
                     json_doc["list"].append(entry)
             else:
                 json_doc = json.load(open(filename))
@@ -176,6 +187,35 @@ class MainWindow(QMainWindow):
             load_next.tube_radius = tube_radius
             load_next.sphere_radius = sphere_radius
             load_next()
+
+def dist(p1, p2):
+    np1 = np.array(p1)
+    np2 = np.array(p2)
+    return np.linalg.norm(np1 - np2)
+
+def ratio_to_rgb(ratio):
+    cap = 0.05
+    min_cap = 1.0 - cap
+    max_cap = 1.0 + cap
+    #result = np.zeros(3)
+
+    if ratio > max_cap:
+        result = [255.0, 0.0, 0.0]
+    elif ratio < min_cap:
+        result = [0.0, 0.0, 255.0]
+    elif ratio > 1.0:
+        other = (ratio - 1.0) / cap * 255.0
+        green = 255.0 - other
+        result = [other, green, 0.0]
+    elif ratio <= 1.0:
+        other = (1.0 - ratio) / cap * 255.0
+        green = 255.0 - other
+        result = [0.0, green, other]
+    else:
+        print("WARNING: NaN in ratio_to_rgb")
+
+    return [i / 255.0 for i in result]
+
 
 def export_scene():
     export_scene.exporter.Update()
