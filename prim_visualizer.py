@@ -6,6 +6,7 @@ import json
 import argparse
 from pathlib import Path
 from copy import deepcopy
+from collections import defaultdict
 
 from PyQt5.QtWidgets import QApplication, QLabel, QMainWindow, QPushButton,\
                             QSizePolicy
@@ -89,7 +90,7 @@ class MainWindow(QMainWindow):
         colors = vtk.vtkNamedColors()
 
         if args.light_mode:
-            self.ren.SetBackground(colors.GetColor3d("white"));
+            self.ren.SetBackground(colors.GetColor3d("white"))
 
         # Buttons
         reset_camera.ren = self.ren
@@ -140,10 +141,11 @@ class MainWindow(QMainWindow):
                                  "color": c,
                                  "radius": tr})
                     json_doc["list"].append(entry)
-                    break
+                    #break
             else:
                 json_doc = json.load(open(filename))
-            if "glyph" not in json_doc.keys() or not json_doc["glyph"]:
+            if ("glyph" not in json_doc.keys() or not json_doc["glyph"]) and not\
+                    args.scalar_field_mode:
                 self.iren.AddObserver(
                         'LeftButtonPressEvent', callback_function)
         elif args.model_mode:
@@ -202,16 +204,17 @@ def load_scalar_field():
     vertices = []
     faces = []
     colors = []
-    colorDict = {}
+    colorDict = defaultdict(lambda: [])
     for v in jd['vertices']:
         v['new_index'] = -1
-    #for e in jd['edges']:
-    #    e['center_index'] = -1
-    #    e['center'] = [-1, -1, -1]
-    #    if not e['type']:
-    #        e['center'] = [i[0]+i[1]/2.0 for i in [jd['vertices'][j]['position'] for j in e['vertices']]] + [0.0]
-    #        vertices.append(e['center'])
-    #        e['center_index'] = len(vertices) - 1
+    for e in jd['edges']:
+        e['center_index'] = -1
+        e['center'] = [-1, -1, -1]
+        if not e['type']:
+            e['center'] = np.mean([np.array(jd['vertices'][j]['position'])
+                                   for j in e['vertices']], axis=0).tolist()
+            vertices.append(e['center'])
+            e['center_index'] = len(vertices) - 1
     for c in jd['cells']:
         center = np.array([0.0, 0.0, 0.0])
         count = 0
@@ -232,39 +235,56 @@ def load_scalar_field():
         for e in c['edges']:
             edge = jd['edges'][e]
             if not edge['type']:
-                v1 = jd['vertices'][edge['vertices'][0]]['new_index']
-                v2 = jd['vertices'][edge['vertices'][1]]['new_index']
-                #ec = edge['center_index']
+                vert1 = jd['vertices'][edge['vertices'][0]]
+                vert2 = jd['vertices'][edge['vertices'][1]]
+                v1 = vert1['new_index']
+                v2 = vert2['new_index']
+                ec = edge['center_index']
                 cc = c['center_index']
-                #faces.append([v1, ec, cc])
-                #faces.append([ec, v2, cc])
-                faces.append([v1, v2, cc])
-
+                faces.append([v1, ec, cc])
+                faces.append([ec, v2, cc])
                 #print(f'{v1}, {v2}, {ec}, {cc}')
+
+                l = dist(vert1['position'], vert2['position'])
+                rgb = ratio_to_rgb(l / edge['rest_length'])
+                colorDict[v1].append(rgb)
+                colorDict[v2].append(rgb)
+                colorDict[ec].append(rgb)
+                colorDict[cc].append(rgb)
+
+    for i in range(len(vertices)):
+        if (colorDict[i]):
+            colors.append(np.mean(colorDict[i], axis=0).tolist())
+        else:
+            colors.append([1.0, 1.0, 1.0])
 
     points = vtk.vtkPoints()
     triangles = vtk.vtkCellArray()
+    ptColors = vtk.vtkFloatArray()
+    ptColors.SetNumberOfComponents(3)
+    ptColors.SetName('Colors')
     for i in vertices:
         points.InsertNextPoint(i)
     for i in faces:
         triangle = vtk.vtkTriangle()
-        triangle.GetPointIds().SetId(0, i[0]);
-        triangle.GetPointIds().SetId(1, i[1]);
-        triangle.GetPointIds().SetId(2, i[2]);
+        triangle.GetPointIds().SetId(0, i[0])
+        triangle.GetPointIds().SetId(1, i[1])
+        triangle.GetPointIds().SetId(2, i[2])
         triangles.InsertNextCell(triangle)
+    for i in colors:
+        ptColors.InsertNextTuple3(*i)
 
     polyData = vtk.vtkPolyData()
     polyData.SetPoints(points)
     polyData.SetPolys(triangles)
+    polyData.GetPointData().SetScalars(ptColors)
     mapper = vtk.vtkPolyDataMapper()
     mapper.SetInputData(polyData)
+    mapper.SetColorMode(2)
 
     actor = vtk.vtkActor()
     actor.SetMapper(mapper)
-    #actor->GetProperty()->SetColor(
-    #        colors->GetColor3d(theme.tris).GetData());
-    load_scalar_field.ren.AddActor(actor);
-    #load_scalar_field.ren.ResetCamera();
+    load_scalar_field.ren.AddActor(actor)
     reset_camera()
 
 def dist(p1, p2):
@@ -399,8 +419,8 @@ def load_model():
     importer.SetRenderWindow(load_model.ren_win)
     importer.Update()
 
-    all_actors = importer.GetRenderer().GetActors();
-    model_actor = all_actors.GetLastActor();
+    all_actors = importer.GetRenderer().GetActors()
+    model_actor = all_actors.GetLastActor()
     mesh_in = model_actor.GetMapper().GetInput()
 
     # Points
@@ -464,7 +484,7 @@ def load_model():
     lines_pd.SetPoints(lines_points)
     lines_pd.SetLines(lines_cells)
     tube_filter = vtk.vtkTubeFilter()
-    tube_filter.SetInputData(lines_pd);
+    tube_filter.SetInputData(lines_pd)
     tube_filter.SetNumberOfSides(8)
     tube_filter.SetRadius(load_model.tube_radius)
     tube_filter.Update()
@@ -476,7 +496,7 @@ def load_model():
 
     # Make the axes actor to the correct sizing based on the elements on screen
     cube_axis = vtk.vtkCubeAxesActor()
-    cube_axis.SetCamera(load_model.ren.GetActiveCamera());
+    cube_axis.SetCamera(load_model.ren.GetActiveCamera())
     mins = [min(i) for i in positions]
     maxs = [max(i) for i in positions]
     dists = [i[0] - i[1] for i in zip(maxs, mins)]
@@ -553,7 +573,7 @@ def load_basic_scene():
     lines_pd.SetPoints(lines_points)
     lines_pd.SetLines(lines_cells)
     tube_filter = vtk.vtkTubeFilter()
-    tube_filter.SetInputData(lines_pd);
+    tube_filter.SetInputData(lines_pd)
     tube_filter.SetNumberOfSides(8)
     tube_filter.SetRadius(load_basic_scene.tube_radius)
     tube_filter.Update()
@@ -565,7 +585,7 @@ def load_basic_scene():
 
     # Make the axes actor to the correct sizing based on the elements on screen
     cube_axis = vtk.vtkCubeAxesActor()
-    cube_axis.SetCamera(load_basic_scene.ren.GetActiveCamera());
+    cube_axis.SetCamera(load_basic_scene.ren.GetActiveCamera())
     mins = [min(i) for i in positions]
     maxs = [max(i) for i in positions]
     dists = [i[0] - i[1] for i in zip(maxs, mins)]
@@ -638,19 +658,19 @@ def load_next():
         lines_points = vtk.vtkPoints()
         lines_cells = vtk.vtkCellArray()
 
-        scale_factors_sphere = vtk.vtkFloatArray();
-        scale_factors_sphere.SetNumberOfComponents(3);
-        scale_factors_sphere.SetName("Scale Factors");
-        colors_sphere = vtk.vtkFloatArray();
-        colors_sphere.SetNumberOfComponents(4);
-        colors_sphere.SetName("Colors");
+        scale_factors_sphere = vtk.vtkFloatArray()
+        scale_factors_sphere.SetNumberOfComponents(3)
+        scale_factors_sphere.SetName("Scale Factors")
+        colors_sphere = vtk.vtkFloatArray()
+        colors_sphere.SetNumberOfComponents(4)
+        colors_sphere.SetName("Colors")
 
-        scale_factors_line = vtk.vtkFloatArray();
-        scale_factors_line.SetNumberOfComponents(1);
-        scale_factors_line.SetName("Tube Radii");
-        colors_line = vtk.vtkFloatArray();
-        colors_line.SetNumberOfComponents(4);
-        colors_line.SetName("Colors");
+        scale_factors_line = vtk.vtkFloatArray()
+        scale_factors_line.SetNumberOfComponents(1)
+        scale_factors_line.SetName("Tube Radii")
+        colors_line = vtk.vtkFloatArray()
+        colors_line.SetNumberOfComponents(4)
+        colors_line.SetName("Colors")
 
         n = 0
         for entity in scene:
@@ -705,13 +725,13 @@ def load_next():
         sphere_pd.SetPoints(sphere_points)
         mapper = vtk.vtkGlyph3DMapper()
 
-        sphere_pd.GetPointData().AddArray(colors_sphere);
-        sphere_pd.GetPointData().AddArray(scale_factors_sphere);
+        sphere_pd.GetPointData().AddArray(colors_sphere)
+        sphere_pd.GetPointData().AddArray(scale_factors_sphere)
         mapper.SetInputData(sphere_pd)
         mapper.SetSourceConnection(sphere_source.GetOutputPort())
         mapper.SetScalarModeToUsePointFieldData()
 
-        mapper.SelectColorArray("Colors");
+        mapper.SelectColorArray("Colors")
         mapper.SetColorMode(2)
 
         mapper.SetScaleModeToScaleByVectorComponents()
@@ -725,8 +745,8 @@ def load_next():
 
         lines_pd.SetPoints(lines_points)
         lines_pd.SetLines(lines_cells)
-        lines_pd.GetPointData().AddArray(colors_line);
-        lines_pd.GetPointData().SetScalars(scale_factors_line);
+        lines_pd.GetPointData().AddArray(colors_line)
+        lines_pd.GetPointData().SetScalars(scale_factors_line)
         lines_pd.GetPointData().SetActiveScalars("Tube Radii")
         tube_filter = vtk.vtkTubeFilter()
         tube_filter.SetInputData(lines_pd)
@@ -734,7 +754,7 @@ def load_next():
         tube_filter.SetVaryRadiusToVaryRadiusByAbsoluteScalar()
         tube_filter.Update()
         mapper = vtk.vtkPolyDataMapper()
-        mapper.SelectColorArray("Colors");
+        mapper.SelectColorArray("Colors")
         mapper.SetColorMode(2)
         mapper.ScalarVisibilityOn()
         mapper.SetScalarModeToUsePointFieldData()
@@ -744,19 +764,19 @@ def load_next():
         load_next.ren.AddActor(actor)
         load_next.actors.append(actor)
 
-    #linesPolyData->GetCellData()->SetScalars(colors);
-    #vtkNew<vtkTubeFilter> tubeFilter;
-    #tubeFilter->SetInputData(linesPolyData);
-    #tubeFilter->SetNumberOfSides(8);
-    #tubeFilter->SetRadius(radius);
-    #tubeFilter->Update();
-    #vtkNew<vtkPolyDataMapper> mapper;
-    #mapper->SetInputConnection(tubeFilter->GetOutputPort());
-    #mapper->SetColorMode(2);
+    #linesPolyData->GetCellData()->SetScalars(colors)
+    #vtkNew<vtkTubeFilter> tubeFilter
+    #tubeFilter->SetInputData(linesPolyData)
+    #tubeFilter->SetNumberOfSides(8)
+    #tubeFilter->SetRadius(radius)
+    #tubeFilter->Update()
+    #vtkNew<vtkPolyDataMapper> mapper
+    #mapper->SetInputConnection(tubeFilter->GetOutputPort())
+    #mapper->SetColorMode(2)
 
-    #vtkNew<vtkActor> actor;
-    #actor->SetMapper(mapper);
-    #actor->GetProperty()->SetLineWidth(4);
+    #vtkNew<vtkActor> actor
+    #actor->SetMapper(mapper)
+    #actor->GetProperty()->SetLineWidth(4)
     else:
         for entity in scene:
             actor = vtk.vtkActor()
@@ -801,7 +821,7 @@ def load_next():
 
     # Make the axes actor to the correct sizing based on the elements on screen
     cube_axis = vtk.vtkCubeAxesActor()
-    cube_axis.SetCamera(load_next.ren.GetActiveCamera());
+    cube_axis.SetCamera(load_next.ren.GetActiveCamera())
     mins = [min(i) for i in load_next.positions]
     maxs = [max(i) for i in load_next.positions]
     dists = [i[0] - i[1] for i in zip(maxs, mins)]
@@ -829,21 +849,21 @@ def load_next():
     writer = vtk.vtkPNGWriter()
 
     window_to_image_filter = vtk.vtkWindowToImageFilter()
-    window_to_image_filter.SetInput(load_next.vtkWidget.GetRenderWindow());
-    window_to_image_filter.SetScale(1);
-    window_to_image_filter.SetInputBufferTypeToRGB();
-    window_to_image_filter.ReadFrontBufferOff();
-    window_to_image_filter.Update();
+    window_to_image_filter.SetInput(load_next.vtkWidget.GetRenderWindow())
+    window_to_image_filter.SetScale(1)
+    window_to_image_filter.SetInputBufferTypeToRGB()
+    window_to_image_filter.ReadFrontBufferOff()
+    window_to_image_filter.Update()
 
-    writer.SetFileName('test.png');
-    writer.SetInputConnection(window_to_image_filter.GetOutputPort());
-    writer.Write();
+    writer.SetFileName('test.png')
+    writer.SetInputConnection(window_to_image_filter.GetOutputPort())
+    writer.Write()
 
     img = CImg('test.png')
     img.draw_text(x0=10, y0=img.height - 40, text=f"kA90: {1.0:.2}, kA120: {1.0:.2}, kLinear: {1.0:.2}, Epochs: {0}",
-            foreground_color=yellow, background_color=np.array([0.0,0.0,0.0]).astype(np.float32), opacity=1.0, font_height=32);
-    img.save_png('test2.png');
-    exit(0)
+            foreground_color=yellow, background_color=np.array([0.0,0.0,0.0]).astype(np.float32), opacity=1.0, font_height=32)
+    img.save_png('test2.png')
+    #exit(0)
 
 def main():
     app = QApplication(sys.argv)
