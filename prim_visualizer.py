@@ -39,6 +39,8 @@ class MainWindow(QMainWindow):
                             action=argparse.BooleanOptionalAction)
         parser.add_argument('-r', '--render-mode', required=False,
                             action=argparse.BooleanOptionalAction)
+        parser.add_argument('-c', '--scalar-field-mode', required=False,
+                            action=argparse.BooleanOptionalAction)
         parser.add_argument('-n', '--no-reset', required=False,
                             action=argparse.BooleanOptionalAction)
         parser.add_argument('-f', '--filename', required=False)
@@ -153,6 +155,10 @@ class MainWindow(QMainWindow):
             load_basic_scene.sphere_radius = sphere_radius
             load_basic_scene.done = False
             load_basic_scene()
+        elif args.scalar_field_mode:
+            load_scalar_field.ren = self.ren
+            load_scalar_field.json_doc = json_doc
+            load_scalar_field()
         elif args.obj_mode:
             load_obj.ren = self.ren
             load_obj.light_mode = args.light_mode
@@ -189,6 +195,77 @@ class MainWindow(QMainWindow):
             load_next.sphere_radius = sphere_radius
             load_next.vtkWidget = self.vtkWidget
             load_next()
+
+def load_scalar_field():
+    jd = load_scalar_field.json_doc
+    #print(jd['edges'][jd['cells'][0]['edges'][0]])
+    vertices = []
+    faces = []
+    colors = []
+    colorDict = {}
+    for v in jd['vertices']:
+        v['new_index'] = -1
+    #for e in jd['edges']:
+    #    e['center_index'] = -1
+    #    e['center'] = [-1, -1, -1]
+    #    if not e['type']:
+    #        e['center'] = [i[0]+i[1]/2.0 for i in [jd['vertices'][j]['position'] for j in e['vertices']]] + [0.0]
+    #        vertices.append(e['center'])
+    #        e['center_index'] = len(vertices) - 1
+    for c in jd['cells']:
+        center = np.array([0.0, 0.0, 0.0])
+        count = 0
+        for e in c['edges']:
+            edge = jd['edges'][e]
+            if not edge['type']:
+                for v in edge['vertices']:
+                    vertex = jd['vertices'][v]
+                    center += np.array(vertex['position'])
+                    count += 1
+                    if vertex['new_index'] == -1:
+                        vertices.append(vertex['position'])
+                        vertex['new_index'] = len(vertices) - 1
+        center /= count
+        c['center'] = center.tolist()
+        vertices.append(c['center'])
+        c['center_index'] = len(vertices) - 1
+        for e in c['edges']:
+            edge = jd['edges'][e]
+            if not edge['type']:
+                v1 = jd['vertices'][edge['vertices'][0]]['new_index']
+                v2 = jd['vertices'][edge['vertices'][1]]['new_index']
+                #ec = edge['center_index']
+                cc = c['center_index']
+                #faces.append([v1, ec, cc])
+                #faces.append([ec, v2, cc])
+                faces.append([v1, v2, cc])
+
+                #print(f'{v1}, {v2}, {ec}, {cc}')
+
+    points = vtk.vtkPoints()
+    triangles = vtk.vtkCellArray()
+    for i in vertices:
+        points.InsertNextPoint(i)
+    for i in faces:
+        triangle = vtk.vtkTriangle()
+        triangle.GetPointIds().SetId(0, i[0]);
+        triangle.GetPointIds().SetId(1, i[1]);
+        triangle.GetPointIds().SetId(2, i[2]);
+        triangles.InsertNextCell(triangle)
+
+    polyData = vtk.vtkPolyData()
+    polyData.SetPoints(points)
+    polyData.SetPolys(triangles)
+    mapper = vtk.vtkPolyDataMapper()
+    mapper.SetInputData(polyData)
+
+    actor = vtk.vtkActor()
+    actor.SetMapper(mapper)
+    #actor->GetProperty()->SetColor(
+    #        colors->GetColor3d(theme.tris).GetData());
+    load_scalar_field.ren.AddActor(actor);
+    #load_scalar_field.ren.ResetCamera();
+    reset_camera()
 
 def dist(p1, p2):
     np1 = np.array(p1)
