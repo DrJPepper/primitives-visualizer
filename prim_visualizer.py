@@ -232,6 +232,8 @@ def load_scalar_field():
         c['center'] = center.tolist()
         vertices.append(c['center'])
         c['center_index'] = len(vertices) - 1
+        e_count = -1
+        done = False
         for e in c['edges']:
             edge = jd['edges'][e]
             if not edge['type']:
@@ -251,12 +253,17 @@ def load_scalar_field():
                 colorDict[v2].append(rgb)
                 colorDict[ec].append(rgb)
                 colorDict[cc].append(rgb)
+                e_count += 1
+            if not done and e_count == 5:
+                done = True
+                for _ in range(12):
+                    colors.append(rgb)
 
-    for i in range(len(vertices)):
-        if (colorDict[i]):
-            colors.append(np.mean(colorDict[i], axis=0).tolist())
-        else:
-            colors.append([1.0, 1.0, 1.0])
+    #for i in range(len(vertices)):
+    #    if (colorDict[i]):
+    #        colors.append(np.mean(colorDict[i], axis=0).tolist())
+    #    else:
+    #        colors.append([1.0, 1.0, 1.0])
 
     points = vtk.vtkPoints()
     triangles = vtk.vtkCellArray()
@@ -277,7 +284,8 @@ def load_scalar_field():
     polyData = vtk.vtkPolyData()
     polyData.SetPoints(points)
     polyData.SetPolys(triangles)
-    polyData.GetPointData().SetScalars(ptColors)
+    #polyData.GetPointData().SetScalars(ptColors)
+    polyData.GetCellData().SetScalars(ptColors)
     mapper = vtk.vtkPolyDataMapper()
     mapper.SetInputData(polyData)
     mapper.SetColorMode(2)
