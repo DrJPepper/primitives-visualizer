@@ -109,10 +109,12 @@ class MainWindow(QMainWindow):
         callback_function.ren = self.ren
         callback_function.info_box = self.infoBox
         callback_function.basic = args.basic_mode
+        load_next.add_cube_axis = True
         json_doc = None
         # Set up callback
         if not (args.basic_mode or args.model_mode or args.obj_mode):
             if args.render_mode:
+                load_next.add_cube_axis = False
                 batch_json = json.load(open(filename))
                 json_doc = {}
                 json_doc["list"] = []
@@ -840,7 +842,8 @@ def load_next():
     cube_axis.SetFlyModeToStaticEdges()
     cube_axis.SetBounds((mins[0], maxs[0], mins[1], maxs[1],
         mins[2], maxs[2]))
-    load_next.ren.AddActor(cube_axis)
+    if load_next.add_cube_axis:
+        load_next.ren.AddActor(cube_axis)
     if load_next.cube_axis:
         load_next.ren.RemoveActor(load_next.cube_axis)
     load_next.cube_axis = cube_axis

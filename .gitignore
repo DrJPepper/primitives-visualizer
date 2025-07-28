@@ -135,3 +135,4 @@ dmypy.json
 *.stl
 reduce_faces.py
 *.png
+strip/
