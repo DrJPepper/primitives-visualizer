@@ -542,7 +542,7 @@ def load_basic_scene():
                open(load_basic_scene.filename).readlines() if i != '\n' and
                  '#' not in i]
     '''
-    scene = [[float(j) for j in re.findall(r'[\d\.]+', i.strip())] for i in
+    scene = [[float(j) for j in re.findall(r'-?[\d\.]+', i.strip())] for i in
                open(load_basic_scene.filename).readlines() if i != '\n' and
                  '#' not in i]
     colors = [re.findall(r'[a-zA-Z]+', i.strip()) for i in
