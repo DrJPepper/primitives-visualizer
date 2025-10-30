@@ -1,4 +1,5 @@
 import sys
+import re
 import calendar
 import time
 import os
@@ -531,6 +532,7 @@ def load_basic_scene():
     if load_basic_scene.done:
         print("No more scenes to render")
         return
+    '''
     try:
         scene = [[float(j) for j in i.strip().split(',')] for i in
                open(load_basic_scene.filename).readlines() if i != '\n' and
@@ -539,17 +541,33 @@ def load_basic_scene():
         scene = [[float(j) for j in i.strip().split()] for i in
                open(load_basic_scene.filename).readlines() if i != '\n' and
                  '#' not in i]
+    '''
+    scene = [[float(j) for j in re.findall(r'[\d\.]+', i.strip())] for i in
+               open(load_basic_scene.filename).readlines() if i != '\n' and
+                 '#' not in i]
+    colors = [re.findall(r'[a-zA-Z]+', i.strip()) for i in
+               open(load_basic_scene.filename).readlines() if i != '\n' and
+                 '#' not in i]
+    colors = [i[0].title() if len(i) else 'Cornsilk' for i in colors]
+    #print(scene)
+    #print(colors)
+    #exit(0)
     positions = [[], [], []]
     sphere_source = vtk.vtkSphereSource()
     sphere_source.SetRadius(load_basic_scene.sphere_radius)
     sphere_pd = vtk.vtkPolyData()
     sphere_points = vtk.vtkPoints()
 
+    colors_sphere = vtk.vtkFloatArray()
+    colors_sphere.SetNumberOfComponents(4)
+    colors_sphere.SetName("Colors")
+
     lines_pd = vtk.vtkPolyData()
     lines_points = vtk.vtkPoints()
     lines_cells = vtk.vtkCellArray()
     n = 0
-    for entity in scene:
+    nc = vtk.vtkNamedColors()
+    for entity, color in zip(scene, colors):
         if len(entity) == 6:
             for i in range(3):
                 positions[i].append(entity[i+3])
@@ -560,6 +578,7 @@ def load_basic_scene():
         actor = None
         if len(entity) == 3:
             sphere_points.InsertNextPoint(entity)
+            colors_sphere.InsertNextTuple4(*nc.GetColor4d(color))
         elif len(entity) == 6:
             lines_points.InsertNextPoint(entity[:3])
             lines_points.InsertNextPoint(entity[3:])
@@ -569,15 +588,40 @@ def load_basic_scene():
             lines_cells.InsertNextCell(line)
             n += 2
 
+    '''
     sphere_pd.SetPoints(sphere_points)
+    sphere_pd.GetPointData().AddArray(colors_sphere)
     mapper = vtk.vtkGlyph3DMapper()
     mapper.SetInputData(sphere_pd)
     mapper.SetSourceConnection(sphere_source.GetOutputPort())
     mapper.ScalarVisibilityOff()
     mapper.ScalingOff()
+    mapper.SetScalarModeToUsePointFieldData()
+    mapper.SelectColorArray("Colors")
+    mapper.SetColorMode(2)
 
     actor = vtk.vtkActor()
     actor.SetMapper(mapper)
+    '''
+
+    sphere_pd.SetPoints(sphere_points)
+    mapper = vtk.vtkGlyph3DMapper()
+
+    sphere_pd.GetPointData().AddArray(colors_sphere)
+    mapper.SetInputData(sphere_pd)
+    mapper.SetSourceConnection(sphere_source.GetOutputPort())
+    mapper.SetScalarModeToUsePointFieldData()
+
+    mapper.SelectColorArray("Colors")
+    mapper.SetColorMode(2)
+
+    mapper.SetScaleModeToScaleByVectorComponents()
+    mapper.SetScaleArray("Scale Factors")
+    mapper.Update()
+
+    actor = vtk.vtkActor()
+    actor.SetMapper(mapper)
+
     load_basic_scene.ren.AddActor(actor)
 
     lines_pd.SetPoints(lines_points)
@@ -854,6 +898,7 @@ def load_next():
         reset_camera()
     reset_camera.renWin.Render()
 
+    '''
     from pycimg import CImg
     yellow = np.array([255.0, 255.0, 0.0]).astype(np.float32)
 
@@ -874,6 +919,7 @@ def load_next():
     img.draw_text(x0=10, y0=img.height - 40, text=f"kA90: {1.0:.2}, kA120: {1.0:.2}, kLinear: {1.0:.2}, Epochs: {0}",
             foreground_color=yellow, background_color=np.array([0.0,0.0,0.0]).astype(np.float32), opacity=1.0, font_height=32)
     img.save_png('test2.png')
+    '''
     #exit(0)
 
 def main():
