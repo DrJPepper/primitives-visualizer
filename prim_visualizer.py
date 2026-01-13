@@ -39,6 +39,8 @@ class MainWindow(QMainWindow):
                             action=argparse.BooleanOptionalAction)
         parser.add_argument('-b', '--basic-mode', required=False,
                             action=argparse.BooleanOptionalAction)
+        parser.add_argument('-w', '--server-mode', required=False,
+                            action=argparse.BooleanOptionalAction)
         parser.add_argument('-r', '--render-mode', required=False,
                             action=argparse.BooleanOptionalAction)
         parser.add_argument('-c', '--scalar-field-mode', required=False,
@@ -153,6 +155,11 @@ class MainWindow(QMainWindow):
                         'LeftButtonPressEvent', callback_function)
         elif args.model_mode:
             self.iren.AddObserver('LeftButtonPressEvent', model_callback)
+        if args.server_mode:
+            server_mode.ren = self.ren
+            server_mode.tube_radius = tube_radius
+            server_mode.sphere_radius = sphere_radius
+            server_mode()
         if args.basic_mode:
             load_basic_scene.ren = self.ren
             load_basic_scene.filename = filename
