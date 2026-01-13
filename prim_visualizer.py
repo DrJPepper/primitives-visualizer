@@ -56,7 +56,7 @@ class MainWindow(QMainWindow):
             default_file = Path("./default_input.txt")
             if default_file.is_file():
                 filename = open("./default_input.txt").readline().strip()
-            else:
+            elif not args.server_mode:
                 print("Error: no input file name supplied")
                 parser.print_help()
                 exit(1)
@@ -115,7 +115,7 @@ class MainWindow(QMainWindow):
         load_next.add_cube_axis = True
         json_doc = None
         # Set up callback
-        if not (args.basic_mode or args.model_mode or args.obj_mode):
+        if not (args.basic_mode or args.model_mode or args.obj_mode or args.server_mode):
             if args.render_mode:
                 load_next.add_cube_axis = False
                 batch_json = json.load(open(filename))
@@ -207,6 +207,9 @@ class MainWindow(QMainWindow):
             load_next.sphere_radius = sphere_radius
             load_next.vtkWidget = self.vtkWidget
             load_next()
+
+def server_mode():
+    print('here')
 
 def load_scalar_field():
     jd = load_scalar_field.json_doc
