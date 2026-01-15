@@ -9,13 +9,21 @@ from pathlib import Path
 from copy import deepcopy
 from collections import defaultdict
 
-from PyQt5.QtWidgets import QApplication, QLabel, QMainWindow, QPushButton,\
+from PyQt6.QtWidgets import QApplication, QLabel, QMainWindow, QPushButton,\
                             QSizePolicy
-from PyQt5.QtCore import QFile, QIODevice
-from PyQt5.uic import loadUi
+from PyQt6.QtCore import QFile, QIODevice, pyqtSignal, QObject, QThread
+from PyQt6.uic import loadUi
 from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 import vtk
 import numpy as np
+
+# 2. Create a Signal mechanism to communicate with Qt
+class StreamScope(QObject):
+    # This signal will carry a string (str) payload
+    data_received = pyqtSignal(dict)
+
+# Global instance to be shared (or pass it via dependency injection)
+qt_signal_emitter = StreamScope()
 
 TUBE_RADIUS_DEFAULT = 0.05
 SPHERE_RADIUS_DEFAULT = 0.1
@@ -45,7 +53,7 @@ class MainWindow(QMainWindow):
                             action=argparse.BooleanOptionalAction)
         parser.add_argument('-c', '--scalar-field-mode', required=False,
                             action=argparse.BooleanOptionalAction)
-        parser.add_argument('-n', '--no-reset', required=False,
+        parser.add_argument('-n', '--dont-reset', required=False,
                             action=argparse.BooleanOptionalAction)
         parser.add_argument('-f', '--filename', required=False)
         parser.add_argument('-t', '--tube-radius', required=False, type=float)
@@ -77,8 +85,8 @@ class MainWindow(QMainWindow):
         # then make it fill the whole frame
         self.vtkWidget = QVTKRenderWindowInteractor()
         self.horizontalLayout_2.addWidget(self.vtkWidget)
-        self.vtkWidget.setSizePolicy(QSizePolicy.Expanding,
-                QSizePolicy.Expanding)
+        #self.vtkWidget.setSizePolicy(QSizePolicy.Expanding,
+                #QSizePolicy.Expanding)
 
         self.ren = vtk.vtkRenderer()
         self.vtkWidget.GetRenderWindow().AddRenderer(self.ren)
@@ -159,8 +167,11 @@ class MainWindow(QMainWindow):
             server_mode.ren = self.ren
             server_mode.tube_radius = tube_radius
             server_mode.sphere_radius = sphere_radius
+            server_mode.window = self
+            server_mode.actors = []
+            qt_signal_emitter.data_received.connect(self.update_scene)
             server_mode()
-        if args.basic_mode:
+        elif args.basic_mode:
             load_basic_scene.ren = self.ren
             load_basic_scene.filename = filename
             load_basic_scene.tube_radius = tube_radius
@@ -193,7 +204,7 @@ class MainWindow(QMainWindow):
             #json_doc = json.load(open(filename))
             #print(json_doc.keys())
             # Associate a lot of persistent information with load_next
-            load_next.reset = not args.no_reset
+            load_next.reset = not args.dont_reset
             load_next.i = 0
             load_next.ren = self.ren
             load_next.json_doc = json_doc
@@ -208,8 +219,182 @@ class MainWindow(QMainWindow):
             load_next.vtkWidget = self.vtkWidget
             load_next()
 
+    def update_scene(self, payload):
+        # This method runs on the Main Qt Thread
+        #print(f"Received: {payload}")
+
+        if payload['action'] == 'init':
+            for actor in server_mode.actors:
+                server_mode.ren.RemoveActor(actor)
+            server_mode.actors = []
+
+            sphere_source = vtk.vtkSphereSource()
+            #sphere_source.SetRadius(server_mode.sphere_radius)
+            #sphere_source.SetRadius(.01)
+            sphere_pd = vtk.vtkPolyData()
+            sphere_points = vtk.vtkPoints()
+
+            lines_pd = vtk.vtkPolyData()
+            lines_points = vtk.vtkPoints()
+            lines_cells = vtk.vtkCellArray()
+
+            scale_factors_sphere = vtk.vtkFloatArray()
+            scale_factors_sphere.SetNumberOfComponents(3)
+            scale_factors_sphere.SetName("Scale Factors")
+            colors_sphere = vtk.vtkFloatArray()
+            colors_sphere.SetNumberOfComponents(4)
+            colors_sphere.SetName("Colors")
+
+            scale_factors_line = vtk.vtkFloatArray()
+            scale_factors_line.SetNumberOfComponents(1)
+            scale_factors_line.SetName("Tube Radii")
+            colors_line = vtk.vtkFloatArray()
+            colors_line.SetNumberOfComponents(4)
+            colors_line.SetName("Colors")
+
+            scene = payload['scene']
+            n = 0
+            for entity in scene:
+                if 'opacity' not in entity.keys() and 'o' not in entity.keys():
+                    entity['o'] = 1.0
+                if 'color' not in entity.keys() and 'c' not in entity.keys():
+                    entity['c'] = [1.0, 1.0, 1.0]
+                json_type = json_get(entity, 't', 'type')
+                if json_type == 'point' or json_type == 'p':
+                    #source.SetCenter(entity['position'])
+                    sphere_points.InsertNextPoint(json_get(entity, 'p', 'position'))
+                    colors_sphere.InsertNextTuple4(*json_get(entity, 'c', 'color'),
+                                                   json_get(entity, 'o', 'opacity'))
+                    if 'radius' not in entity.keys() and 'r' not in entity.keys():
+                        entity['r'] = server_mode.sphere_radius
+                    scale_factors_sphere.InsertNextTuple3(
+                            *[json_get(entity, 'r', 'radius') * 2 for _ in range(3)])
+                    #actor.GetProperty().SetColor(entity['color'])
+                    #actor.GetProperty().SetOpacity(entity['opacity'])
+                elif json_type == 'vector' or json_type == 'v':
+                    lines_points.InsertNextPoint(json_get(entity, 'p', 'position')[:3])
+                    lines_points.InsertNextPoint(json_get(entity, 'p', 'position')[3:])
+                    line = vtk.vtkLine()
+                    line.GetPointIds().SetId(0, n)
+                    line.GetPointIds().SetId(1, n+1)
+                    n += 2
+                    lines_cells.InsertNextCell(line)
+                    if 'radius' not in entity.keys() and 'r' not in entity.keys():
+                        entity['r'] = server_mode.tube_radius
+                    # This is not working as cell data, only point data,
+                    # so needs inserted twice
+                    for _ in range(2):
+                        colors_line.InsertNextTuple4(*json_get(entity, 'c', 'color'),
+                                                      json_get(entity, 'o', 'opacity'))
+                        scale_factors_line.InsertNextTuple1(json_get(entity, 'r', 'radius'))
+                elif json_type == 'polyline' or json_type == 'y':
+                    line = vtk.vtkPolyLine()
+                    id_count = len(json_get(entity, 'p', 'position'))
+                    line.GetPointIds().SetNumberOfIds(id_count)
+                    if 'radius' not in entity.keys() and 'r' not in entity.keys():
+                        entity['r'] = server_mode.tube_radius
+                    for i in range(id_count):
+                        pt = json_get(entity, 'p', 'position')[i]
+                        lines_points.InsertNextPoint(pt)
+                        line.GetPointIds().SetId(i, n)
+                        n += 1
+                        colors_line.InsertNextTuple4(*json_get(entity, 'c', 'color'),
+                                                      json_get(entity, 'o', 'opacity'))
+                        scale_factors_line.InsertNextTuple1(json_get(entity, 'r', 'radius'))
+                    lines_cells.InsertNextCell(line)
+
+            sphere_pd.SetPoints(sphere_points)
+            mapper = vtk.vtkGlyph3DMapper()
+
+            sphere_pd.GetPointData().AddArray(colors_sphere)
+            sphere_pd.GetPointData().AddArray(scale_factors_sphere)
+            mapper.SetInputData(sphere_pd)
+            mapper.SetSourceConnection(sphere_source.GetOutputPort())
+            mapper.SetScalarModeToUsePointFieldData()
+
+            mapper.SelectColorArray("Colors")
+            mapper.SetColorMode(2)
+
+            mapper.SetScaleModeToScaleByVectorComponents()
+            mapper.SetScaleArray("Scale Factors")
+            mapper.Update()
+
+            actor = vtk.vtkActor()
+            actor.SetMapper(mapper)
+            server_mode.ren.AddActor(actor)
+            server_mode.actors.append(actor)
+
+            lines_pd.SetPoints(lines_points)
+            lines_pd.SetLines(lines_cells)
+            lines_pd.GetPointData().AddArray(colors_line)
+            lines_pd.GetPointData().SetScalars(scale_factors_line)
+            lines_pd.GetPointData().SetActiveScalars("Tube Radii")
+            tube_filter = vtk.vtkTubeFilter()
+            tube_filter.SetInputData(lines_pd)
+            tube_filter.SetNumberOfSides(8)
+            tube_filter.SetVaryRadiusToVaryRadiusByAbsoluteScalar()
+            tube_filter.Update()
+            mapper = vtk.vtkPolyDataMapper()
+            mapper.SelectColorArray("Colors")
+            mapper.SetColorMode(2)
+            mapper.ScalarVisibilityOn()
+            mapper.SetScalarModeToUsePointFieldData()
+            mapper.SetInputConnection(tube_filter.GetOutputPort())
+            actor = vtk.vtkActor()
+            actor.SetMapper(mapper)
+            server_mode.ren.AddActor(actor)
+            server_mode.actors.append(actor)
+            reset_camera()
+
+    def closeEvent(self, event):
+        # Clean up the thread when window closes
+        self.uvicorn_thread.stop()
+        event.accept()
+
 def server_mode():
-    print('here')
+    import uvicorn
+    from uvicorn.server import Server
+    from fastapi import BackgroundTasks, FastAPI
+
+    app = FastAPI()
+
+    # 3. Create the Uvicorn Thread
+    class UvicornThread(QThread):
+        def __init__(self):
+            super().__init__()
+            self.server = None
+
+        def run(self):
+            # specific config for running inside a thread
+            config = uvicorn.Config(app, host="127.0.0.1", port=8000, log_level="warning", reload=True)
+            self.server = uvicorn.Server(config)
+            
+            # Override signal handlers to avoid clashing with Qt's signals
+            # (Ctrl+C handling is tricky when mixing threads)
+            self.server.install_signal_handlers = lambda: None
+            
+            # Run the server
+            self.server.run()
+
+        def stop(self):
+            if self.server:
+                self.server.should_exit = True
+                self.wait()
+
+        @app.post("/update_scene")
+        async def update_scene(payload: dict):
+            # Emit the signal. This is thread-safe.
+            qt_signal_emitter.data_received.emit(payload)
+            print(payload)
+            return {"status": "Message sent to GUI", "payload": payload}
+
+        @app.get("/")
+        async def root():
+            return {'message': 'Server is running'}
+
+    server_mode.window.uvicorn_thread = UvicornThread()
+    server_mode.window.uvicorn_thread.start()
+
 
 def load_scalar_field():
     jd = load_scalar_field.json_doc
@@ -931,6 +1116,7 @@ def load_next():
     img.save_png('test2.png')
     '''
     #exit(0)
+
 
 def main():
     app = QApplication(sys.argv)
