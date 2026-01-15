@@ -385,7 +385,6 @@ def server_mode():
         async def update_scene(payload: dict):
             # Emit the signal. This is thread-safe.
             qt_signal_emitter.data_received.emit(payload)
-            print(payload)
             return {"status": "Message sent to GUI", "payload": payload}
 
         @app.get("/")
