@@ -610,6 +610,7 @@ def load_obj():
         a = 0.27
         actor.GetProperty().SetColor(a, a, a)
     actor.GetProperty().EdgeVisibilityOn()
+    actor.GetProperty().LightingOff()
     reset_camera()
 
 """
