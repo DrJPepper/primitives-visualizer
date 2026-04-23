@@ -348,7 +348,10 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         # Clean up the thread when window closes
-        self.uvicorn_thread.stop()
+        try:
+            self.uvicorn_thread.stop()
+        except AttributeError:
+            pass
         event.accept()
 
 def server_mode():
