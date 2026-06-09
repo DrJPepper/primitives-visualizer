@@ -882,27 +882,20 @@ def load_next():
     # Process every entity within this scene/JSON entry
     for entity in scene:
         # Determine how large to make the axes
-        #try:
         pos = json_get(entity, 'p', 'position')
+        to_add = [load_next.positions]
+        if hold:
+            to_add.append(load_next.hold_positions)
         for i in range(len(pos)):
             if type(pos[i]) is float:
-                load_next.positions[i % 3].append(pos[i])
+                for a in to_add:
+                    a[i % 3].append(pos[i])
             else:
                 for j in range(len(pos[i])):
-                    load_next.positions[j].append(pos[i][j])
-            if hold:
-                if type(pos) is int:
-                    load_next.positions[i % 3].append(pos[i])
-                else:
-                    for j in range(len(pos[i])):
-                        load_next.positions[j].append(pos[i][j])
-        #except:
-        #    print(entity)
-        #    exit(1)
+                    for a in to_add:
+                        a[j].append(pos[i][j])
     if "glyph" in load_next.json_doc.keys() and load_next.json_doc["glyph"]:
         sphere_source = vtk.vtkSphereSource()
-        #sphere_source.SetRadius(load_next.sphere_radius)
-        #sphere_source.SetRadius(.01)
         sphere_pd = vtk.vtkPolyData()
         sphere_points = vtk.vtkPoints()
 

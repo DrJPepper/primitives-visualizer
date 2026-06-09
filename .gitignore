@@ -136,3 +136,4 @@ dmypy.json
 reduce_faces.py
 *.png
 strip/
+images/
